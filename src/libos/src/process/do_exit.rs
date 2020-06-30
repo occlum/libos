@@ -61,6 +61,13 @@ fn exit_thread(term_status: TermStatus) {
 fn exit_process(thread: &ThreadRef, term_status: TermStatus) {
     let process = thread.process();
 
+    // Remove process from pgrp
+    let pgrp_ref = process.pgrp();
+    pgrp_ref.remove_process(&process);
+
+    // Remove pgrp info from process
+    process.remove_pgrp();
+
     // Deadlock note: always lock parent first, then child.
 
     // Lock the idle process since it may adopt new children.

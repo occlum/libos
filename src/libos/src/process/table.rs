@@ -1,5 +1,30 @@
-use super::{ProcessRef, ThreadRef};
+use super::{ProcessGrpRef, ProcessRef, ThreadRef};
 use crate::prelude::*;
+
+pub fn get_pgrp(pgid: pid_t) -> Result<ProcessGrpRef> {
+    PROCESSGRP_TABLE.lock().unwrap().get(pgid)
+}
+
+pub(super) fn add_pgrp(pgrp: ProcessGrpRef) -> Result<()> {
+    PROCESSGRP_TABLE.lock().unwrap().add(pgrp.pgid(), pgrp)
+}
+
+pub(super) fn del_pgrp(pgid: pid_t) -> Result<ProcessGrpRef> {
+    PROCESSGRP_TABLE.lock().unwrap().del(pgid)
+}
+
+pub fn get_pgrp_number(pgid: pid_t) -> usize {
+    PROCESSGRP_TABLE.lock().unwrap().len()
+}
+
+pub fn get_all_pgrp() -> Vec<ProcessGrpRef> {
+    PROCESSGRP_TABLE
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|(_, pgrp_ref)| pgrp_ref.clone())
+        .collect()
+}
 
 pub fn get_process(pid: pid_t) -> Result<ProcessRef> {
     PROCESS_TABLE.lock().unwrap().get(pid)
@@ -44,6 +69,10 @@ pub(super) fn del_thread(tid: pid_t) -> Result<ThreadRef> {
 }
 
 pub fn debug() {
+    println!(
+        "process group table = {:#?}",
+        PROCESSGRP_TABLE.lock().unwrap()
+    );
     println!("process table = {:#?}", PROCESS_TABLE.lock().unwrap());
     println!("thread table = {:#?}", THREAD_TABLE.lock().unwrap());
     //println!("idle = {:#?}", *super::IDLE);
@@ -54,6 +83,8 @@ lazy_static! {
         { SgxMutex::new(Table::<ProcessRef>::with_capacity(8)) };
     static ref THREAD_TABLE: SgxMutex<Table<ThreadRef>> =
         { SgxMutex::new(Table::<ThreadRef>::with_capacity(8)) };
+    static ref PROCESSGRP_TABLE: SgxMutex<Table<ProcessGrpRef>> =
+        { SgxMutex::new(Table::<ProcessGrpRef>::with_capacity(4)) };
 }
 
 #[derive(Debug, Clone)]
@@ -66,6 +97,10 @@ impl<I: Debug + Clone + Send + Sync> Table<I> {
         Self {
             map: HashMap::with_capacity(capacity),
         }
+    }
+
+    pub fn len(&self) -> usize {
+        self.map.len()
     }
 
     pub fn iter(&self) -> std::collections::hash_map::Iter<'_, pid_t, I> {

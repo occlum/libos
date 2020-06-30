@@ -43,7 +43,7 @@ use crate::net::{
 use crate::process::{
     do_arch_prctl, do_clone, do_exit, do_exit_group, do_futex, do_getegid, do_geteuid, do_getgid,
     do_getpgid, do_getpid, do_getppid, do_gettid, do_getuid, do_prctl, do_set_tid_address,
-    do_spawn, do_wait4, pid_t, FdOp, ThreadStatus,
+    do_setpgid, do_spawn, do_wait4, pid_t, spawnattr_t, FdOp, ThreadStatus,
 };
 use crate::sched::{do_getcpu, do_sched_getaffinity, do_sched_setaffinity, do_sched_yield};
 use crate::signal::{
@@ -194,7 +194,7 @@ macro_rules! process_syscall_table_with_callback {
             (Setgid = 106) => handle_unsupported(),
             (Geteuid = 107) => do_geteuid(),
             (Getegid = 108) => do_getegid(),
-            (Setpgid = 109) => handle_unsupported(),
+            (Setpgid = 109) => do_setpgid(pid: i32, pgid: i32),
             (Getppid = 110) => do_getppid(),
             (Getpgrp = 111) => handle_unsupported(),
             (Setsid = 112) => handle_unsupported(),
@@ -206,7 +206,7 @@ macro_rules! process_syscall_table_with_callback {
             (Getresuid = 118) => handle_unsupported(),
             (Setresgid = 119) => handle_unsupported(),
             (Getresgid = 120) => handle_unsupported(),
-            (Getpgid = 121) => do_getpgid(),
+            (Getpgid = 121) => do_getpgid(pid: i32),
             (Setfsuid = 122) => handle_unsupported(),
             (Setfsgid = 123) => handle_unsupported(),
             (Getsid = 124) => handle_unsupported(),
@@ -413,7 +413,7 @@ macro_rules! process_syscall_table_with_callback {
             (Mlock2 = 325) => handle_unsupported(),
 
             // Occlum-specific system calls
-            (Spawn = 360) => do_spawn(child_pid_ptr: *mut u32, path: *const i8, argv: *const *const i8, envp: *const *const i8, fdop_list: *const FdOp),
+            (Spawn = 360) => do_spawn(child_pid_ptr: *mut u32, path: *const i8, argv: *const *const i8, envp: *const *const i8, fdop_list: *const FdOp, attr: *const spawnattr_t),
             (HandleException = 361) => do_handle_exception(info: *mut sgx_exception_info_t, fpregs: *mut FpRegs, context: *mut CpuContext),
             (HandleInterrupt = 362) => do_handle_interrupt(info: *mut sgx_interrupt_info_t, fpregs: *mut FpRegs, context: *mut CpuContext),
         }

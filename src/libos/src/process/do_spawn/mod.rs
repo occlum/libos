@@ -3,6 +3,7 @@ use std::path::Path;
 
 use self::aux_vec::{AuxKey, AuxVec};
 use self::exec_loader::{load_exec_file_to_vec, load_file_to_vec};
+use self::spawn_attr::{spawn_attr_flags, spawnattr_t};
 use super::elf_file::{ElfFile, ElfHeader, ProgramHeader, ProgramHeaderExt};
 use super::process::ProcessBuilder;
 use super::task::Task;
@@ -19,6 +20,7 @@ mod aux_vec;
 mod exec_loader;
 mod init_stack;
 mod init_vm;
+pub mod spawn_attr;
 
 /// Spawn a new process and execute it in a new host thread.
 pub fn do_spawn(
@@ -26,6 +28,7 @@ pub fn do_spawn(
     argv: &[CString],
     envp: &[CString],
     file_actions: &[FileAction],
+    attr: Option<spawnattr_t>,
     current_ref: &ThreadRef,
 ) -> Result<pid_t> {
     let exec_now = true;
@@ -34,6 +37,7 @@ pub fn do_spawn(
         argv,
         envp,
         file_actions,
+        attr,
         None,
         current_ref,
         exec_now,
@@ -55,6 +59,7 @@ pub fn do_spawn_without_exec(
         argv,
         envp,
         file_actions,
+        None,
         Some(host_stdio_fds),
         current_ref,
         exec_now,
@@ -66,6 +71,7 @@ fn do_spawn_common(
     argv: &[CString],
     envp: &[CString],
     file_actions: &[FileAction],
+    attr: Option<spawnattr_t>,
     host_stdio_fds: Option<&HostStdioFds>,
     current_ref: &ThreadRef,
     exec_now: bool,
@@ -82,6 +88,32 @@ fn do_spawn_common(
     let new_main_thread = new_process_ref
         .main_thread()
         .expect("the main thread is just created; it must exist");
+
+    // Check spawn attribute here before exec.
+    // Now only POSIX_SPAWN_SETPGROUP is supported for posix_spawnattr_t.
+    // More attribute checker can be put here.
+    if attr.is_some()
+        && attr
+            .unwrap()
+            .is_set(spawn_attr_flags::POSIX_SPAWN_SETPGROUP)
+    {
+        // Process hasn't enqueued for exec yet.
+        let is_executing = false;
+        // We directly call trusted do_setpgid because the new process must be the child process
+        // of this calling process.
+        super::pgrp::do_setpgid(
+            new_process_ref.pid(),
+            attr.unwrap().get_pgrp(),
+            is_executing,
+        )?;
+    } else {
+        // By default, add new process to parent process group (child has the same process group as parent).
+        let pgrp_ref = new_process_ref.pgrp();
+        pgrp_ref.add_new_process(new_process_ref.clone());
+    }
+    debug!("process group:{:?}", new_process_ref.pgrp());
+    debug!("non idle process all pgrp: {:?}", table::get_all_pgrp());
+
     if exec_now {
         task::enqueue_and_exec(new_main_thread);
     } else {
@@ -186,6 +218,9 @@ fn new_process(
         let elf_name = elf_path.rsplit('/').collect::<Vec<&str>>()[0];
         let thread_name = ThreadName::new(elf_name);
 
+        // By default, use parent process's process group.
+        let pgrp_ref = process_ref.pgrp();
+
         ProcessBuilder::new()
             .vm(vm_ref)
             .exec_path(&elf_path)
@@ -194,6 +229,7 @@ fn new_process(
             .sched(sched_ref)
             .rlimits(rlimit_ref)
             .fs(fs_ref)
+            .pgrp(pgrp_ref)
             .files(files_ref)
             .name(thread_name)
             .build()?

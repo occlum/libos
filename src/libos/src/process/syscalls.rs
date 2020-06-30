@@ -1,9 +1,11 @@
 use super::do_arch_prctl::ArchPrctlCode;
 use super::do_clone::CloneFlags;
 use super::do_futex::{FutexFlags, FutexOp};
-use super::do_spawn::FileAction;
+use super::do_spawn::{spawn_attr::spawnattr_t, FileAction};
+use super::pgrp::*;
 use super::prctl::PrctlCmd;
 use super::process::ProcessFilter;
+use super::table;
 use crate::prelude::*;
 use crate::time::timespec_t;
 use crate::util::mem_util::from_user::*;
@@ -15,19 +17,25 @@ pub fn do_spawn(
     argv: *const *const i8,
     envp: *const *const i8,
     fdop_list: *const FdOp,
+    attr_ptr: *const spawnattr_t,
 ) -> Result<isize> {
     check_mut_ptr(child_pid_ptr)?;
     let path = clone_cstring_safely(path)?.to_string_lossy().into_owned();
     let argv = clone_cstrings_safely(argv)?;
     let envp = clone_cstrings_safely(envp)?;
     let file_actions = clone_file_actions_safely(fdop_list)?;
+    let attr = if attr_ptr != std::ptr::null() {
+        Some(spawnattr_t::from_raw_ptr(attr_ptr)?)
+    } else {
+        None
+    };
     let current = current!();
     debug!(
-        "spawn: path: {:?}, argv: {:?}, envp: {:?}, fdop: {:?}",
-        path, argv, envp, file_actions
+        "spawn: path: {:?}, argv: {:?}, envp: {:?}, fdop: {:?}, attr: {:?}",
+        path, argv, envp, file_actions, attr
     );
 
-    let child_pid = super::do_spawn::do_spawn(&path, &argv, &envp, &file_actions, &current)?;
+    let child_pid = super::do_spawn::do_spawn(&path, &argv, &envp, &file_actions, attr, &current)?;
 
     unsafe { *child_pid_ptr = child_pid };
     Ok(0)
@@ -247,9 +255,38 @@ pub fn do_getppid() -> Result<isize> {
     Ok(ppid as isize)
 }
 
-pub fn do_getpgid() -> Result<isize> {
-    let pgid = super::do_getpid::do_getpgid();
+pub fn do_getpgid(pid: i32) -> Result<isize> {
+    if pid < 0 {
+        return_errno!(ESRCH, "process with negative pid is not found");
+    }
+
+    let real_pid = if pid == 0 {
+        do_getpid()? as pid_t
+    } else {
+        pid as pid_t
+    };
+    let pgid = super::pgrp::do_getpgid(real_pid)?;
     Ok(pgid as isize)
+}
+
+pub fn do_setpgid(pid: i32, pgid: i32) -> Result<isize> {
+    if pgid < 0 {
+        return_errno!(EINVAL, "pgid can't be negative");
+    }
+
+    let pid = pid as pid_t;
+    let pgid = pgid as pid_t;
+    // Pid should be the calling process or a child of the calling process.
+    let current_pid = current!().process().pid();
+    if pid != 0 && pid != current_pid && current!().process().inner().is_child_of(pid) == false {
+        return_errno!(ESRCH, "pid not calling process or child processes");
+    }
+
+    // When this function is calling, the process must be executing.
+    let is_executing = true;
+    let ret = super::pgrp::do_setpgid(pid, pgid, is_executing)?;
+
+    Ok(ret)
 }
 
 // TODO: implement uid, gid, euid, egid

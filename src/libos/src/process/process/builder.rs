@@ -1,8 +1,9 @@
+use super::super::table;
 use super::super::task::Task;
 use super::super::thread::{ThreadBuilder, ThreadId, ThreadName};
 use super::super::{
-    FileTableRef, ForcedExitStatus, FsViewRef, ProcessRef, ProcessVMRef, ResourceLimitsRef,
-    SchedAgentRef,
+    FileTableRef, ForcedExitStatus, FsViewRef, ProcessGrpRef, ProcessRef, ProcessVMRef,
+    ResourceLimitsRef, SchedAgentRef,
 };
 use super::{Process, ProcessInner};
 use crate::prelude::*;
@@ -14,6 +15,7 @@ pub struct ProcessBuilder {
     thread_builder: Option<ThreadBuilder>,
     // Mandatory fields
     vm: Option<ProcessVMRef>,
+    pgrp: Option<ProcessGrpRef>,
     // Optional fields, which have reasonable default values
     exec_path: Option<String>,
     parent: Option<ProcessRef>,
@@ -27,6 +29,7 @@ impl ProcessBuilder {
             tid: None,
             thread_builder: Some(thread_builder),
             vm: None,
+            pgrp: None,
             exec_path: None,
             parent: None,
             no_parent: false,
@@ -50,6 +53,11 @@ impl ProcessBuilder {
 
     pub fn no_parent(mut self, no_parent: bool) -> Self {
         self.no_parent = no_parent;
+        self
+    }
+
+    pub fn pgrp(mut self, pgrp: ProcessGrpRef) -> Self {
+        self.pgrp = Some(pgrp);
         self
     }
 
@@ -98,6 +106,7 @@ impl ProcessBuilder {
         let new_process = {
             let exec_path = self.exec_path.take().unwrap_or_default();
             let parent = self.parent.take().map(|parent| RwLock::new(parent));
+            let pgrp = RwLock::new(self.pgrp.clone());
             let inner = SgxMutex::new(ProcessInner::new());
             let sig_dispositions = RwLock::new(SigDispositions::new());
             let sig_queues = RwLock::new(SigQueues::new());
@@ -106,6 +115,7 @@ impl ProcessBuilder {
                 pid,
                 exec_path,
                 parent,
+                pgrp,
                 inner,
                 sig_dispositions,
                 sig_queues,
@@ -125,6 +135,13 @@ impl ProcessBuilder {
                 .children_mut()
                 .unwrap()
                 .push(new_process.clone());
+        }
+
+        // Only set leader process and process group id during process building when idle process first time init
+        let pgrp_ref = new_process.pgrp();
+        if !pgrp_ref.leader_process_is_set() && pgrp_ref.pgid() == 0 {
+            pgrp_ref.set_leader_process(new_process.clone());
+            pgrp_ref.set_pgid(pid);
         }
 
         Ok(new_process)
