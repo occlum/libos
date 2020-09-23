@@ -1,0 +1,50 @@
+# base stage:
+# Install dependencies for deployment to get minimum size for deployer.
+# For deployment environment, only occlum-runtime, sgx-psw and python2 are needed.
+FROM ubuntu:18.04 as base
+LABEL maintainer="Chunyang Hui <sanqian.hcy@antgroup.com>"
+
+ENV APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=1
+RUN apt-get update && DEBIAN_FRONTEND="noninteractive" apt-get install -y --no-install-recommends gnupg wget python ca-certificates && \
+    echo 'deb [arch=amd64] https://download.01.org/intel-sgx/sgx_repo/ubuntu bionic main' | tee /etc/apt/sources.list.d/intel-sgx.list && \
+    wget -qO - https://download.01.org/intel-sgx/sgx_repo/ubuntu/intel-sgx-deb.key | apt-key add - && \
+    echo 'deb [arch=amd64] https://mirrors.openanolis.org/inclavare-containers/deb-repo bionic main' | tee /etc/apt/sources.list.d/inclavare-containers.list && \
+    wget -qO - https://mirrors.openanolis.org/inclavare-containers/deb-repo/DEB-GPG-KEY.key  | apt-key add - && \
+    apt-get update --allow-unauthenticated && \
+    apt-get install -y occlum-runtime libsgx-uae-service && \
+    mkdir -p /var/run/aesmd && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+ENV PATH="/opt/occlum/build/bin:/usr/local/occlum/bin:$PATH"
+
+
+# packager stage:
+# Users can build their own applications and put to occlum instance. And then use "occlum package"
+# to get a minimum subset of files to run in deployment environment.
+FROM base as packager
+WORKDIR /root
+RUN apt-get update --allow-unauthenticated && \
+    apt-get install -y --no-install-recommends make gdb git libfuse-dev libtool && \
+    git clone https://github.com/occlum/occlum.git && \
+    cp -r /root/occlum/demos /root/demos && \
+    rm -rf /root/occlum && \
+    apt-get install -y occlum && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    cd /root && \
+    occlum new occlum-instance && \
+    cd /root/demos/hello_c && \
+    make && cp hello_world /root/occlum-instance/image/bin && \
+    cd /root/occlum-instance && occlum build && \
+    occlum package
+
+
+# deployer stage:
+# Unpack the package from packager
+FROM base as deployer
+WORKDIR /root
+COPY entrypoint.sh /opt/occlum
+COPY --from=packager /root/occlum-instance/occlum-instance.tar.gz .
+RUN tar -xvzf occlum-instance.tar.gz
+
+ENTRYPOINT ["/opt/occlum/entrypoint.sh"]
