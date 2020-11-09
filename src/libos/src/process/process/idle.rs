@@ -1,3 +1,5 @@
+use super::super::pgrp::ProcessGrp;
+use super::super::table;
 use super::super::task::Task;
 use super::super::thread::ThreadId;
 use super::{ProcessBuilder, ThreadRef};
@@ -19,6 +21,7 @@ fn create_idle_thread() -> Result<ThreadRef> {
     let dummy_tid = ThreadId::zero();
     let dummy_vm = Arc::new(ProcessVM::default());
     let dummy_task = Task::default();
+    let dummy_pgrp = Arc::new(ProcessGrp::default());
 
     // rlimit get from Occlum.json
     let rlimits = Arc::new(SgxMutex::new(ResourceLimits::default()));
@@ -27,17 +30,22 @@ fn create_idle_thread() -> Result<ThreadRef> {
     let idle_process = ProcessBuilder::new()
         .tid(dummy_tid)
         .vm(dummy_vm)
+        .pgrp(dummy_pgrp)
         .task(dummy_task)
         .rlimits(rlimits)
         .no_parent(true)
         .build()?;
     debug_assert!(idle_process.pid() == 0);
+    debug_assert!(idle_process.pgid() == 0);
 
     let idle_thread = idle_process.main_thread().unwrap();
     debug_assert!(idle_thread.tid() == 0);
 
     // We do not add the idle process/thread to the process/thread table.
     // This ensures that the idle process is not accessible from the user space.
+
+    // Keep process groud 0 in the table
+    table::add_pgrp(idle_process.pgrp());
 
     Ok(idle_thread)
 }

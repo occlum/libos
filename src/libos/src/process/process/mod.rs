@@ -1,7 +1,7 @@
 use std::fmt;
 
 use super::wait::WaitQueue;
-use super::{ForcedExitStatus, ProcessRef, TermStatus, ThreadRef};
+use super::{ForcedExitStatus, ProcessGrpRef, ProcessRef, TermStatus, ThreadRef};
 use crate::prelude::*;
 use crate::signal::{SigDispositions, SigNum, SigQueues};
 
@@ -17,6 +17,7 @@ pub struct Process {
     exec_path: String,
     // Mutable info
     parent: Option<RwLock<ProcessRef>>,
+    pgrp: RwLock<Option<ProcessGrpRef>>,
     inner: SgxMutex<ProcessInner>,
     // Signal
     sig_dispositions: RwLock<SigDispositions>,
@@ -38,9 +39,8 @@ impl Process {
     }
 
     /// Get process group ID
-    // TODO: implement process group
     pub fn pgid(&self) -> pid_t {
-        self.pid
+        self.pgrp().pgid()
     }
 
     /// Get the parent process.
@@ -55,6 +55,29 @@ impl Process {
             .read()
             .unwrap()
             .clone()
+    }
+
+    /// Get the process group.
+    pub fn pgrp(&self) -> ProcessGrpRef {
+        self.pgrp
+            .read()
+            .unwrap()
+            .as_ref()
+            // Process must be assigned a process group
+            .unwrap()
+            .clone()
+    }
+
+    /// Update process group when setpgid is called
+    pub fn update_pgrp(&self, new_pgrp: ProcessGrpRef) {
+        let mut pgrp = self.pgrp.write().unwrap();
+        *pgrp = Some(new_pgrp);
+    }
+
+    /// Remove process group when process exit
+    pub fn remove_pgrp(&self) {
+        let mut pgrp = self.pgrp.write().unwrap();
+        *pgrp = None;
     }
 
     /// Get the main thread.
@@ -182,6 +205,13 @@ impl ProcessInner {
 
     pub fn num_children(&mut self) -> usize {
         self.children().map(|children| children.len()).unwrap_or(0)
+    }
+
+    pub fn is_child_of(&self, pid: pid_t) -> bool {
+        match self.children() {
+            Some(children) => children.iter().find(|&child| child.pid() == pid).is_some(),
+            None => false,
+        }
     }
 
     pub fn threads(&self) -> Option<&Vec<ThreadRef>> {

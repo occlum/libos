@@ -2,7 +2,7 @@
     "resource_limits": {
         "kernel_space_heap_size": "32MB",
         "kernel_space_stack_size": "1MB",
-        "user_space_size": "128MB",
+        "user_space_size": "256MB",
         "max_num_of_threads": 32
     },
     "process": {
