@@ -1,5 +1,5 @@
 {
-  "projectName": "libos",
+  "projectName": "occlum",
   "projectOwner": "occlum",
   "repoType": "github",
   "repoHost": "https://github.com",
@@ -78,6 +78,15 @@
       "contributions": [
         "code",
         "test"
+      ]
+    },
+    {
+      "login": "light1021",
+      "name": "vincent",
+      "avatar_url": "https://avatars0.githubusercontent.com/u/16668949?v=4",
+      "profile": "https://github.com/light1021",
+      "contributions": [
+        "bug"
       ]
     }
   ],
