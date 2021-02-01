@@ -416,8 +416,17 @@ macro_rules! process_syscall_table_with_callback {
             (SpawnMusl = 360) => do_spawn_for_musl(child_pid_ptr: *mut u32, path: *const i8, argv: *const *const i8, envp: *const *const i8, fdop_list: *const FdOp),
             (HandleException = 361) => do_handle_exception(info: *mut sgx_exception_info_t, fpregs: *mut FpRegs, context: *mut CpuContext),
             (HandleInterrupt = 362) => do_handle_interrupt(info: *mut sgx_interrupt_info_t, fpregs: *mut FpRegs, context: *mut CpuContext),
+            (RunUnitTests = 363) => run_unit_tests(name_prefix: *const c_char),
         }
     };
+}
+
+fn run_unit_tests(name_prefix: *const c_char) -> Result<isize> {
+    #[cfg(feature = "unit_test")]
+    return unit_test::run_unit_tests(name_prefix);
+
+    #[cfg(not(feature = "unit_test"))]
+    handle_unsupported()
 }
 
 /// System call numbers.

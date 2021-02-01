@@ -116,7 +116,7 @@ jobs:
       run: docker exec $occlum_test bash -c "cargo uninstall sccache || true; cd /root/occlum; make submodule"
 
     - name: Build source
-      run: docker exec $occlum_test bash -c "cd /root/occlum; OCCLUM_RELEASE_BUILD=y make install"
+      run: docker exec $occlum_test bash -c "cd /root/occlum; OCCLUM_UT=1 OCCLUM_RELEASE_BUILD=y make install"
 
     - name: Integration test
       run:  docker exec $occlum_test bash -c "cd /root/occlum; OCCLUM_LOG_LEVEL=trace make test"

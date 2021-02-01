@@ -18,6 +18,7 @@ pub use crate::error::*;
 pub use crate::fs::{File, FileDesc, FileRef};
 pub use crate::process::{pid_t, uid_t};
 pub use crate::util::sync::RwLock;
+pub use test_proc_macro::occlum_test;
 
 macro_rules! debug_trace {
     () => {

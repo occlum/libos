@@ -100,7 +100,12 @@ $(ALL_BUILD_SUBDIRS):
 LIBOS_SO_DEPS := $(LIBOS_CORE_A) $(LIBCOMPILER_RT_PATCH_A)
 
 $(LIBOS_SO_REAL): $(LIBOS_CORE_A) $(LIBCOMPILER_RT_PATCH_A)
+ifeq ($(OCCLUM_RELEASE_BUILD), 1)
 	@$(CC) $(LIBOS_SO_DEPS) -o $@ $(LINK_FLAGS) -Wl,-soname=$(LIBOS_SONAME)
+else
+# use whole-archive to include unused symbols of the incremental debug build
+	@$(CC) -Wl,-whole-archive $(LIBOS_SO_DEPS) -Wl,-no-whole-archive -o $@ $(LINK_FLAGS) -Wl,-soname=$(LIBOS_SONAME)
+endif
 	@echo "LINK => $@"
 
 $(LIBOS_CORE_A): $(LIBOS_CORE_RS_A) $(C_OBJS) $(CXX_OBJS) $(S_OBJS) $(EDL_C_OBJS)
@@ -127,22 +132,28 @@ ifneq ($(OCCLUM_COV),)
         -Coverflow-checks=off -Cpanic=abort"
 endif
 
+ifeq ($(OCCLUM_UT), 1)
+    LIBOS_FEATURES += unit_test
+endif
+ifneq ($(OCCLUM_RELEASE_BUILD), 1)
+    LIBOS_FEATURES += unit_test
+endif
+
+$(LIBOS_CORE_RS_A): $(RUST_SRCS)
 # Release build is for production use. We enable code coverage only for debug
-# build.  It also simplifies the implementation as the release and debug build
+# build. It also simplifies the implementation as the release and debug build
 # have different output paths.
 ifeq ($(OCCLUM_RELEASE_BUILD), 1)
-$(LIBOS_CORE_RS_A): $(RUST_SRCS)
 	@RUSTC_BOOTSTRAP=1 RUSTC_WRAPPER=$(RUSTC_WRAPPER) cargo build --release --target-dir=$(RUST_TARGET_DIR) -Z unstable-options --out-dir=$(RUST_OUT_DIR) --features "$(LIBOS_FEATURES)"
 	@echo "CARGO (release) => $@"
 else ifneq ($(OCCLUM_COV),)
-$(LIBOS_CORE_RS_A): $(RUST_SRCS)
 	@CARGO_INCREMENTAL=0 RUSTC_BOOTSTRAP=1 RUSTFLAGS=$(COV_FLAGS) cargo build --target-dir=$(RUST_TARGET_DIR) -Z unstable-options --out-dir=$(RUST_OUT_DIR) --features "$(LIBOS_FEATURES)"
-	@echo "CARGO (debug + cov) => $@"
+	@echo "CARGO (debug) => $@"
 else
-$(LIBOS_CORE_RS_A): $(RUST_SRCS)
 	@RUSTC_BOOTSTRAP=1 RUSTC_WRAPPER=$(RUSTC_WRAPPER) cargo build --target-dir=$(RUST_TARGET_DIR) -Z unstable-options --out-dir=$(RUST_OUT_DIR) --features "$(LIBOS_FEATURES)"
 	@echo "CARGO (debug) => $@"
 endif
+	@echo "enabled occlum features are$(LIBOS_FEATURES)"
 
 $(OBJ_DIR)/libos/$(SRC_OBJ)/Enclave_t.o: $(OBJ_DIR)/libos/$(SRC_OBJ)/Enclave_t.c
 	@$(CC) $(C_FLAGS) -Iinclude/edl -c $< -o $@

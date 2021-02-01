@@ -25,6 +25,8 @@ rcore-fs-devfs = { path = "../../deps/sefs/rcore-fs-devfs" }
 serde = { path = "../../deps/serde-sgx/serde", features = ["derive"] }
 serde_json = { path = "../../deps/serde-json-sgx" }
 memoffset = "0.6.1"
+inventory = { version = "0.1.9" }
+test_proc_macro = { path = "./src/crates/test_proc_macro" }
 
 [patch.'https://github.com/apache/teaclave-sgx-sdk.git']
 sgx_tstd = { path = "../../deps/rust-sgx-sdk/sgx_tstd" }
@@ -37,6 +39,7 @@ sgx_file_cache = []     # Cache SgxFile objects. Invalidation is unimplemented.
 sgx1_exception_sim = [] # Simulate #PF and #GP exceptions on SGX 1
 dcap = []               # DCAP support. The compilation relies on DCAP package.
 cov = ["sgx_cov"]       # Enable coverage colletcion.
+unit_test = [] # Unit testing
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies]
 xmas-elf = { path = "../../deps/xmas-elf" }

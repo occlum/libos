@@ -34,7 +34,7 @@ jobs:
       run:  docker exec ubuntu-test bash -c "cd /root/occlum; make submodule"
 
     - name: Build source
-      run:  docker exec ubuntu-test bash -c "cd /root/occlum; OCCLUM_RELEASE_BUILD=y SGX_MODE=SIM make"
+      run:  docker exec ubuntu-test bash -c "cd /root/occlum; OCCLUM_UT=1 OCCLUM_RELEASE_BUILD=y SGX_MODE=SIM make"
 
     - name: Integration test
       run:  docker exec ubuntu-test bash -c "cd /root/occlum; OCCLUM_LOG_LEVEL=trace SGX_MODE=SIM make test"
