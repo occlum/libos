@@ -161,18 +161,21 @@ fn open_or_create_sefs_according_to(
                 Box::new(SgxStorage::new(source_path, user_key, &root_mac)),
                 &time::OcclumTimeProvider,
                 &SgxUuidProvider,
+                Some(Box::new(FlockListCreater)),
             )?
         } else if source_path.join("metadata").exists() {
             SEFS::open(
                 Box::new(SgxStorage::new(source_path, user_key, &root_mac)),
                 &time::OcclumTimeProvider,
                 &SgxUuidProvider,
+                Some(Box::new(FlockListCreater)),
             )?
         } else {
             SEFS::create(
                 Box::new(SgxStorage::new(source_path, user_key, &root_mac)),
                 &time::OcclumTimeProvider,
                 &SgxUuidProvider,
+                Some(Box::new(FlockListCreater)),
             )?
         }
     } else {
@@ -180,6 +183,7 @@ fn open_or_create_sefs_according_to(
             Box::new(SgxStorage::new(source_path, user_key, &root_mac)),
             &time::OcclumTimeProvider,
             &SgxUuidProvider,
+            Some(Box::new(FlockListCreater)),
         )?
     };
     Ok(sefs)
