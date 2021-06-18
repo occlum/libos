@@ -42,7 +42,7 @@ enclave {
          *      EEXIST - The LibOS has already been initialized.
          *      EINVAL - The value of an argument are invalid.
          */
-        public int occlum_ecall_init([in, string] const char* log_level, [in, string] const char* instance_dir);
+        public int occlum_ecall_init([in, string] const char* log_level, [in, string] const char* instance_dir, [in, string] const char* resolv_conf_ptr);
 
         /*
          * Create a new LibOS process to do the task specified by the given 

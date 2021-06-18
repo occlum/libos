@@ -54,6 +54,9 @@ extern crate serde_json;
 #[macro_use]
 extern crate memoffset;
 
+#[macro_use]
+extern crate resolv_conf;
+
 use sgx_trts::libc;
 use sgx_types::*;
 use std::backtrace::{self, PrintFormat};

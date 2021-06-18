@@ -1,3 +1,6 @@
+use super::file_ops::AccessibilityCheckMode;
+use crate::fs::{AccessMode, CreationFlags, FsView};
+use std::ffi::CString;
 use std::sync::Once;
 
 use super::rootfs::{mount_nonroot_fs_according_to, open_root_fs_according_to};
@@ -27,5 +30,26 @@ pub fn do_mount_rootfs(
         *root_inode = new_root_inode;
         *ENTRY_POINTS.write().unwrap() = user_config.entry_points.to_owned();
     });
+
+    let resolv_conf_path = String::from("/etc/resolv.conf");
+
+    let fs_view = FsView::new();
+    match fs_view.lookup_inode(&resolv_conf_path) {
+        Err(e) if e.errno() == ENOENT => {
+            let resolv_conf_file = match fs_view.open_file(
+                &resolv_conf_path,
+                AccessMode::O_RDWR as u32 | CreationFlags::O_CREAT.bits(),
+                0o666,
+            ) {
+                Err(e) => {
+                    return_errno!(EINVAL, "failed to open /etc/resolv.conf in enclave");
+                }
+                Ok(file) => file,
+            };
+            resolv_conf_file.write(&*RESOLV_CONF_BYTES.read().unwrap());
+        }
+        Err(e) => return Err(e),
+        _ => (),
+    }
     Ok(())
 }

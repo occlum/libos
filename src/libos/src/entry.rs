@@ -5,7 +5,7 @@ use std::sync::Once;
 
 use super::*;
 use crate::exception::*;
-use crate::fs::HostStdioFds;
+use crate::fs::{AccessMode, CreationFlags, FsView, HostStdioFds};
 use crate::interrupt;
 use crate::process::ProcessFilter;
 use crate::signal::SigNum;
@@ -13,6 +13,7 @@ use crate::time::up_time::init;
 use crate::util::log::LevelFilter;
 use crate::util::mem_util::from_untrusted::*;
 use crate::util::sgx::allow_debug as sgx_allow_debug;
+use resolv_conf::*;
 use sgx_tse::*;
 
 pub static mut INSTANCE_DIR: String = String::new();
@@ -23,6 +24,7 @@ lazy_static! {
     static ref HAS_INIT: AtomicBool = AtomicBool::new(false);
     pub static ref ENTRY_POINTS: RwLock<Vec<PathBuf>> =
         RwLock::new(config::LIBOS_CONFIG.entry_points.clone());
+    pub static ref RESOLV_CONF_BYTES: RwLock<Vec<u8>> = RwLock::new(Vec::new());
 }
 
 macro_rules! ecall_errno {
@@ -33,7 +35,11 @@ macro_rules! ecall_errno {
 }
 
 #[no_mangle]
-pub extern "C" fn occlum_ecall_init(log_level: *const c_char, instance_dir: *const c_char) -> i32 {
+pub extern "C" fn occlum_ecall_init(
+    log_level: *const c_char,
+    instance_dir: *const c_char,
+    resolv_conf_ptr: *const c_char,
+) -> i32 {
     if HAS_INIT.load(Ordering::SeqCst) == true {
         return ecall_errno!(EEXIST);
     }
@@ -86,6 +92,39 @@ pub extern "C" fn occlum_ecall_init(log_level: *const c_char, instance_dir: *con
         // Enable global backtrace
         unsafe { backtrace::enable_backtrace(&ENCLAVE_PATH, PrintFormat::Short) };
     });
+
+    // Read resolv.conf file from host
+    let resolv_conf_bytes = unsafe {
+        assert!(!resolv_conf_ptr.is_null());
+        CStr::from_ptr(resolv_conf_ptr).to_bytes()
+    };
+
+    // Parse and inspect resolv.conf file
+    match resolv_conf::Config::parse(resolv_conf_bytes) {
+        Err(e) => {
+            eprintln!("invalid host /etc/resolv.conf: {}", e);
+        }
+        Ok(cfg) => {
+            // Write resolv.conf file into occlum init fs
+            let fs_view = FsView::new();
+            let resolv_conf_file = match fs_view.open_file(
+                "/etc/resolv.conf",
+                AccessMode::O_RDWR as u32 | CreationFlags::O_CREAT.bits(),
+                0o666,
+            ) {
+                Err(e) => {
+                    eprintln!("failed to open /etc/resolv.conf in enclave: {}", e);
+                    return ecall_errno!(EINVAL);
+                }
+                Ok(file) => file,
+            };
+            resolv_conf_file.write(resolv_conf_bytes);
+
+            // Prepare resolv.conf file for occlum image fs
+            let mut resolv_conf_write = RESOLV_CONF_BYTES.write().unwrap();
+            resolv_conf_write.append(&mut resolv_conf_bytes.to_vec());
+        }
+    };
 
     0
 }

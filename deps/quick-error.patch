@@ -1,0 +1,120 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index 022b543..8eeea9b 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -12,3 +12,6 @@ homepage = "http://github.com/tailhook/quick-error"
+ repository = "http://github.com/tailhook/quick-error"
+ documentation = "http://docs.rs/quick-error"
+ categories = ["rust-patterns"]
++
++[dependencies]
++core-error =  {version = "0.0.1-rc4" , features = ["alloc"]}
+\ No newline at end of file
+diff --git a/src/lib.rs b/src/lib.rs
+index a99edb6..a2cc2f6 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,4 +1,5 @@
+ #![warn(missing_docs, rust_2018_idioms)]
++#![no_std]
+ //! A macro which makes errors easy to write
+ //!
+ //! Minimum type is like this:
+@@ -355,11 +356,11 @@ macro_rules! quick_error {
+         $(#[$meta])*
+         $($strdef)* $strname ( $internal );
+ 
+-        impl ::std::fmt::Display for $strname {
+-            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>)
+-                -> ::std::fmt::Result
++        impl ::core::fmt::Display for $strname {
++            fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>)
++                -> ::core::fmt::Result
+             {
+-                ::std::fmt::Display::fmt(&self.0, f)
++                ::core::fmt::Display::fmt(&self.0, f)
+             }
+         }
+ 
+@@ -369,8 +370,8 @@ macro_rules! quick_error {
+             }
+         }
+ 
+-        impl ::std::error::Error for $strname {
+-            fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
++        impl ::core_error::Error for $strname {
++            fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+                 self.0.source()
+             }
+         }
+@@ -628,9 +629,9 @@ macro_rules! quick_error {
+         #[allow(renamed_and_removed_lints)]
+         #[allow(unused_doc_comment)]
+         #[allow(unused_doc_comments)]
+-        impl ::std::fmt::Display for $name {
+-            fn fmt(&self, fmt: &mut ::std::fmt::Formatter<'_>)
+-                -> ::std::fmt::Result
++        impl ::core::fmt::Display for $name {
++            fn fmt(&self, fmt: &mut ::core::fmt::Formatter<'_>)
++                -> ::core::fmt::Result
+             {
+                 match *self {
+                     $(
+@@ -653,8 +654,8 @@ macro_rules! quick_error {
+         #[allow(renamed_and_removed_lints)]
+         #[allow(unused_doc_comment)]
+         #[allow(unused_doc_comments)]
+-        impl ::std::error::Error for $name {
+-            fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
++        impl ::core_error::Error for $name {
++            fn source(&self) -> Option<&(dyn core_error::Error + 'static)> {
+                 match *self {
+                     $(
+                         $(#[$imeta])*
+@@ -683,17 +684,17 @@ macro_rules! quick_error {
+     (FIND_DISPLAY_IMPL $name:ident $item:ident: $imode:tt
+         { display($self_:tt) -> ($( $exprs:tt )*) $( $tail:tt )*}
+     ) => {
+-        |quick_error!(IDENT $self_): &$name, f: &mut ::std::fmt::Formatter<'_>| { write!(f, $( $exprs )*) }
++        |quick_error!(IDENT $self_): &$name, f: &mut ::core::fmt::Formatter<'_>| { write!(f, $( $exprs )*) }
+     };
+     (FIND_DISPLAY_IMPL $name:ident $item:ident: $imode:tt
+         { display($pattern:expr) $( $tail:tt )*}
+     ) => {
+-        |_, f: &mut ::std::fmt::Formatter<'_>| { write!(f, $pattern) }
++        |_, f: &mut ::core::fmt::Formatter<'_>| { write!(f, $pattern) }
+     };
+     (FIND_DISPLAY_IMPL $name:ident $item:ident: $imode:tt
+         { display($pattern:expr, $( $exprs:tt )*) $( $tail:tt )*}
+     ) => {
+-        |_, f: &mut ::std::fmt::Formatter<'_>| { write!(f, $pattern, $( $exprs )*) }
++        |_, f: &mut ::core::fmt::Formatter<'_>| { write!(f, $pattern, $( $exprs )*) }
+     };
+     (FIND_DISPLAY_IMPL $name:ident $item:ident: $imode:tt
+         { $t:tt $( $tail:tt )*}
+@@ -705,7 +706,7 @@ macro_rules! quick_error {
+     (FIND_DISPLAY_IMPL $name:ident $item:ident: $imode:tt
+         { }
+     ) => {
+-        |self_: &$name, f: &mut ::std::fmt::Formatter<'_>| {
++        |self_: &$name, f: &mut ::core::fmt::Formatter<'_>| {
+             write!(f, "{:?}", self_)
+         }
+     };
+@@ -972,10 +973,10 @@ impl<T, E> ResultExt<T, E> for Result<T, E> {
+ 
+ #[cfg(test)]
+ mod test {
+-    use std::error::Error;
+-    use std::num::{ParseFloatError, ParseIntError};
++    use core_error::Error;
++    use core::num::{ParseFloatError, ParseIntError};
+     use std::path::{Path, PathBuf};
+-    use std::str::Utf8Error;
++    use core::str::Utf8Error;
+     use std::string::FromUtf8Error;
+ 
+     use super::ResultExt;
+-- 
+2.17.1
+

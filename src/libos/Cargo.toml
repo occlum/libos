@@ -22,6 +22,7 @@ rcore-fs-ramfs = { path = "../../deps/sefs/rcore-fs-ramfs" }
 rcore-fs-mountfs = { path = "../../deps/sefs/rcore-fs-mountfs" }
 rcore-fs-unionfs = { path = "../../deps/sefs/rcore-fs-unionfs" }
 rcore-fs-devfs = { path = "../../deps/sefs/rcore-fs-devfs" }
+resolv-conf = { path = "../../deps/resolv-conf" }
 serde = { path = "../../deps/serde-sgx/serde", features = ["derive"] }
 serde_json = { path = "../../deps/serde-json-sgx" }
 memoffset = "0.6.1"

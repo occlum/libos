@@ -1,0 +1,100 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index 06ae7b2..96dae46 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -14,7 +14,9 @@ version = "0.7.0"
+ authors = ["paul@colomiets.name"]
+ 
+ [dependencies]
+-quick-error = "2.0.0"
++quick-error = { path = "../quick-error" }
++no-std-net = { path = "../no-std-net" }
++core-error =  {version = "0.0.1-rc4" , features = ["alloc"]}                                                        
+ hostname = { version = "^0.3", optional = true }
+ 
+ [features]
+diff --git a/src/config.rs b/src/config.rs
+index b6b6460..0470345 100644
+--- a/src/config.rs
++++ b/src/config.rs
+@@ -1,8 +1,11 @@
+-use std::fmt;
+-use std::iter::{IntoIterator, Iterator};
+-use std::slice::Iter;
++use core::fmt;
++use core::iter::{IntoIterator, Iterator};
++use core::slice::Iter;
+ use {grammar, Network, ParseError, ScopedIp};
+-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
++use no_std_net::{IpAddr, Ipv4Addr, Ipv6Addr};
++use alloc::vec;
++use alloc::vec::Vec;
++use alloc::string::String;
+ 
+ const NAMESERVER_LIMIT:usize = 3;
+ const SEARCH_LIMIT:usize = 6;
+diff --git a/src/grammar.rs b/src/grammar.rs
+index 14fad22..e3e7a0d 100644
+--- a/src/grammar.rs
++++ b/src/grammar.rs
+@@ -1,5 +1,6 @@
+-use std::net::{Ipv4Addr, Ipv6Addr};
+-use std::str::{Utf8Error, from_utf8};
++use no_std_net::{Ipv4Addr, Ipv6Addr};
++use core::str::{Utf8Error, from_utf8};
++use alloc::string::ToString;
+ 
+ use {AddrParseError, Config, Network, Lookup, Family};
+ 
+diff --git a/src/ip.rs b/src/ip.rs
+index a7b0787..7ce6dac 100644
+--- a/src/ip.rs
++++ b/src/ip.rs
+@@ -1,7 +1,9 @@
+-use std::error::Error;
+-use std::fmt;
+-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+-use std::str::FromStr;
++use core_error::Error;
++use core::fmt;
++use no_std_net::{IpAddr, Ipv4Addr, Ipv6Addr};
++use core::str::FromStr;
++use alloc::string::String;
++use alloc::string::ToString;
+ 
+ /// A network, that is an IP address and a mask
+ #[derive(Clone, Debug, PartialEq, Eq)]
+@@ -126,8 +128,8 @@ impl fmt::Display for AddrParseError {
+ impl Error for AddrParseError {
+ }
+ 
+-impl From<::std::net::AddrParseError> for AddrParseError {
+-    fn from(_: ::std::net::AddrParseError) -> Self {
++impl From<::no_std_net::AddrParseError> for AddrParseError {
++    fn from(_: ::no_std_net::AddrParseError) -> Self {
+         AddrParseError
+     }
+ }
+diff --git a/src/lib.rs b/src/lib.rs
+index a55a9d7..cd7615c 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -90,11 +90,15 @@
+ 
+ #![warn(missing_debug_implementations)]
+ #![warn(missing_docs)]
++#![no_std]
+ 
+ #[macro_use]
+ extern crate quick_error;
+ #[cfg(feature = "system")]
+ extern crate hostname;
++extern crate alloc;
++extern crate no_std_net;
++extern crate core_error;
+ 
+ mod grammar;
+ mod ip;
+-- 
+2.17.1
+

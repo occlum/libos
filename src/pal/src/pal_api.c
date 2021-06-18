@@ -2,6 +2,7 @@
 #include "Enclave_u.h"
 #include "pal_enclave.h"
 #include "pal_error.h"
+#include "pal_init_read.h"
 #include "pal_interrupt_thread.h"
 #include "pal_log.h"
 #include "pal_sig_handler.h"
@@ -103,8 +104,11 @@ int occlum_pal_init(const struct occlum_pal_attr *attr) {
     eid = pal_get_enclave_id();
 
     int ecall_ret = 0;
+    char *resolv_conf_ptr = read_resolv_conf();
     sgx_status_t ecall_status = occlum_ecall_init(eid, &ecall_ret, attr->log_level,
-                                resolved_path);
+                                resolved_path, (const char *) resolv_conf_ptr);
+    free(resolv_conf_ptr);
+    resolv_conf_ptr = NULL;
     if (ecall_status != SGX_SUCCESS) {
         const char *sgx_err = pal_get_sgx_error_msg(ecall_status);
         PAL_ERROR("Failed to do ECall with error code 0x%x: %s", ecall_status, sgx_err);
