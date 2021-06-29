@@ -15,7 +15,7 @@ FAIL_LOG = $(BUILD_DIR)/test/.fail
 # Dependencies: need to be compiled but not to run by any Makefile target
 TEST_DEPS := client data_sink naughty_child
 # Tests: need to be compiled and run by test-% target
-TESTS ?= env empty hello_world malloc mmap file fs_perms getpid spawn sched pipe time \
+TESTS ?= env empty hello_world malloc mmap file fs_perms getpid spawn sched pipe time timerfd \
 	truncate readdir mkdir open stat link symlink chmod chown tls pthread system_info rlimit \
 	server server_epoll unix_socket cout hostfs cpuid rdtsc device sleep exit_group \
 	ioctl fcntl eventfd emulate_syscall access signal sysinfo prctl rename procfs wait \

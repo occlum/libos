@@ -147,6 +147,10 @@ enclave {
             [out] struct timespec* rem
         ) propagate_errno;
 
+        int occlum_ocall_timerfd_create(int clockid, int flags) propagate_errno;
+        int occlum_ocall_timerfd_settime(int fd, int flags, [in] const struct itimerspec* new_value, [out] struct itimerspec* old_value) propagate_errno;
+        int occlum_ocall_timerfd_gettime(int fd, [out] struct itimerspec* curr_value) propagate_errno;
+
         void occlum_ocall_sync(void);
 
         void* occlum_ocall_posix_memalign(size_t alignment, size_t size);
