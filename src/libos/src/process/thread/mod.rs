@@ -4,7 +4,7 @@ use std::ptr::NonNull;
 use super::task::Task;
 use super::{
     FileTableRef, ForcedExitStatus, FsViewRef, ProcessRef, ProcessVM, ProcessVMRef,
-    ResourceLimitsRef, SchedAgentRef, TermStatus, ThreadRef,
+    ResourceLimitsRef, RobustListHead, SchedAgentRef, TermStatus, ThreadRef,
 };
 use crate::events::HostEventFd;
 use crate::fs::{EventCreationFlags, EventFile};
@@ -28,6 +28,7 @@ pub struct Thread {
     tid: ThreadId,
     // Mutable info
     clear_ctid: RwLock<Option<NonNull<pid_t>>>,
+    robust_list: RwLock<Option<NonNull<RobustListHead>>>,
     inner: SgxMutex<ThreadInner>,
     name: RwLock<ThreadName>,
     // Process
@@ -137,6 +138,28 @@ impl Thread {
 
     pub fn set_clear_ctid(&self, new_clear_ctid: Option<NonNull<pid_t>>) {
         *self.clear_ctid.write().unwrap() = new_clear_ctid;
+    }
+
+    pub fn robust_list(&self) -> Option<NonNull<RobustListHead>> {
+        *self.robust_list.read().unwrap()
+    }
+
+    pub fn set_robust_list(&self, new_robust_list: Option<NonNull<RobustListHead>>) {
+        *self.robust_list.write().unwrap() = new_robust_list;
+    }
+
+    /// Walks the robust futex list, marking futex dead and wake waiters.
+    /// It corresponds to Linux's exit_robust_list(), errors are silently ignored.
+    pub fn wake_robust_list(&self) {
+        let list_head_ptr = match self.robust_list() {
+            None => {
+                return;
+            }
+            Some(robust_list) => robust_list.as_ptr(),
+        };
+        let robust_list = unsafe { &*list_head_ptr };
+        robust_list.wake(self.tid());
+        self.set_robust_list(None);
     }
 
     pub fn name(&self) -> ThreadName {

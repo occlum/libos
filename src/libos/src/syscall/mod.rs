@@ -40,10 +40,11 @@ use crate::net::{
     do_shutdown, do_socket, do_socketpair, mmsghdr, msghdr, msghdr_mut,
 };
 use crate::process::{
-    do_arch_prctl, do_clone, do_execve, do_exit, do_exit_group, do_futex, do_getegid, do_geteuid,
-    do_getgid, do_getgroups, do_getpgid, do_getpid, do_getppid, do_gettid, do_getuid, do_prctl,
-    do_set_tid_address, do_spawn_for_glibc, do_spawn_for_musl, do_wait4, pid_t, posix_spawnattr_t,
-    FdOp, SpawnFileActions, ThreadStatus,
+    do_arch_prctl, do_clone, do_execve, do_exit, do_exit_group, do_futex, do_get_robust_list,
+    do_getegid, do_geteuid, do_getgid, do_getgroups, do_getpgid, do_getpid, do_getppid, do_gettid,
+    do_getuid, do_prctl, do_set_robust_list, do_set_tid_address, do_spawn_for_glibc,
+    do_spawn_for_musl, do_wait4, pid_t, posix_spawnattr_t, FdOp, RobustListHead, SpawnFileActions,
+    ThreadStatus,
 };
 use crate::sched::{do_getcpu, do_sched_getaffinity, do_sched_setaffinity, do_sched_yield};
 use crate::signal::{
@@ -358,8 +359,8 @@ macro_rules! process_syscall_table_with_callback {
             (Pselect6 = 270) => handle_unsupported(),
             (Ppoll = 271) => handle_unsupported(),
             (Unshare = 272) => handle_unsupported(),
-            (SetRobustList = 273) => handle_unsupported(),
-            (GetRobustList = 274) => handle_unsupported(),
+            (SetRobustList = 273) => do_set_robust_list(list_head_ptr: *mut RobustListHead, len: usize),
+            (GetRobustList = 274) => do_get_robust_list(tid: pid_t, list_head_ptr_ptr: *mut *mut RobustListHead, len_ptr: *mut usize),
             (Splice = 275) => handle_unsupported(),
             (Tee = 276) => handle_unsupported(),
             (SyncFileRange = 277) => handle_unsupported(),

@@ -44,6 +44,9 @@ fn exit_thread(term_status: TermStatus) {
         futex_wake(ctid_ptr.as_ptr() as *const i32, 1);
     }
 
+    // Notify waiters that the owner of futex has died.
+    thread.wake_robust_list();
+
     // Keep the main thread's tid available as long as the process is not destroyed.
     // This is important as the user space may still attempt to access the main
     // thread's ThreadRef through the process's pid after the process has become
