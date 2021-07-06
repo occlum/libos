@@ -20,7 +20,7 @@ jobs:
       run: echo "OCCLUM_VERSION=$(grep 'Version =' src/pal/include/occlum_version.h | awk '{print $4}')" >> $GITHUB_ENV;
 
     - name: Create container with ubuntu image
-      run: docker run -itd --name=ubuntu-test -v $GITHUB_WORKSPACE:/root/occlum occlum/occlum:${{ env.OCCLUM_VERSION }}-ubuntu18.04
+      run: docker run -itd --name=ubuntu-test -v $GITHUB_WORKSPACE:/root/occlum jessehui/occlum:${{ env.OCCLUM_VERSION }}-ubuntu18.04-vfork
 
     - name: Check format
       run:  docker exec ubuntu-test bash -c 'cd /root/occlum; info=$(make format-check);
@@ -54,7 +54,7 @@ jobs:
       run: echo "OCCLUM_VERSION=$(grep 'Version =' src/pal/include/occlum_version.h | awk '{print $4}')" >> $GITHUB_ENV;
 
     - name: Create container with centos image
-      run: docker run -itd --name=centos-test -v $GITHUB_WORKSPACE:/root/occlum occlum/occlum:${{ env.OCCLUM_VERSION }}-centos8.2
+      run: docker run -itd --name=centos-test -v $GITHUB_WORKSPACE:/root/occlum jessehui/occlum:${{ env.OCCLUM_VERSION }}-centos8.2-vfork
 
     - name: Check format
       run:  docker exec centos-test bash -c 'cd /root/occlum; info=$(make format-check);

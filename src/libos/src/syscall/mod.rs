@@ -42,8 +42,8 @@ use crate::net::{
 use crate::process::{
     do_arch_prctl, do_clone, do_execve, do_exit, do_exit_group, do_futex, do_getegid, do_geteuid,
     do_getgid, do_getgroups, do_getpgid, do_getpid, do_getppid, do_gettid, do_getuid, do_prctl,
-    do_set_tid_address, do_spawn_for_glibc, do_spawn_for_musl, do_wait4, pid_t, posix_spawnattr_t,
-    FdOp, SpawnFileActions, ThreadStatus,
+    do_set_tid_address, do_spawn_for_glibc, do_spawn_for_musl, do_vfork, do_wait4, pid_t,
+    posix_spawnattr_t, FdOp, SpawnFileActions, ThreadStatus,
 };
 use crate::sched::{do_getcpu, do_sched_getaffinity, do_sched_setaffinity, do_sched_yield};
 use crate::signal::{
@@ -143,8 +143,8 @@ macro_rules! process_syscall_table_with_callback {
             (Getsockopt = 55) => do_getsockopt(fd: c_int, level: c_int, optname: c_int, optval: *mut c_void, optlen: *mut libc::socklen_t),
             (Clone = 56) => do_clone(flags: u32, stack_addr: usize, ptid: *mut pid_t, ctid: *mut pid_t, new_tls: usize),
             (Fork = 57) => handle_unsupported(),
-            (Vfork = 58) => handle_unsupported(),
-            (Execve = 59) => do_execve(path: *const i8, argv: *const *const i8, envp: *const *const i8),
+            (Vfork = 58) => do_vfork(context: *mut CpuContext),
+            (Execve = 59) => do_execve(path: *const i8, argv: *const *const i8, envp: *const *const i8, context: *mut CpuContext),
             (Exit = 60) => do_exit(exit_status: i32),
             (Wait4 = 61) => do_wait4(pid: i32, _exit_status: *mut i32, options: u32),
             (Kill = 62) => do_kill(pid: i32, sig: c_int),
@@ -316,7 +316,7 @@ macro_rules! process_syscall_table_with_callback {
             (ClockGettime = 228) => do_clock_gettime(clockid: clockid_t, ts_u: *mut timespec_t),
             (ClockGetres = 229) => do_clock_getres(clockid: clockid_t, res_u: *mut timespec_t),
             (ClockNanosleep = 230) => handle_unsupported(),
-            (ExitGroup = 231) => do_exit_group(exit_status: i32),
+            (ExitGroup = 231) => do_exit_group(exit_status: i32, user_context: *mut CpuContext),
             (EpollWait = 232) => do_epoll_wait(epfd: c_int, events: *mut libc::epoll_event, maxevents: c_int, timeout: c_int),
             (EpollCtl = 233) => do_epoll_ctl(epfd: c_int, op: c_int, fd: c_int, event: *const libc::epoll_event),
             (Tgkill = 234) => do_tgkill(pid: i32, tid: pid_t, sig: c_int),
@@ -628,6 +628,16 @@ fn do_syscall(user_context: &mut CpuContext) {
         // need to modify it
         if syscall_num == SyscallNum::RtSigreturn {
             syscall.args[0] = user_context as *mut _ as isize;
+        } else if syscall_num == SyscallNum::Vfork {
+            syscall.args[0] = user_context as *mut _ as isize;
+        } else if syscall_num == SyscallNum::Execve {
+            // syscall.args[0] == path
+            // syscall.args[1] == argv
+            // syscall.args[2] == envp
+            syscall.args[3] = user_context as *mut _ as isize;
+        } else if syscall_num == SyscallNum::ExitGroup {
+            // syscall.args[0] == status
+            syscall.args[1] = user_context as *mut _ as isize;
         } else if syscall_num == SyscallNum::HandleException {
             // syscall.args[0] == info
             // syscall.args[1] == fpregs
@@ -719,7 +729,7 @@ fn do_syscall(user_context: &mut CpuContext) {
 }
 
 /// Return to the user space according to the given CPU context
-fn do_sysret(user_context: &mut CpuContext) -> ! {
+pub fn do_sysret(user_context: &mut CpuContext) -> ! {
     // Rust compiler would complain about passing to external C functions a CpuContext
     // pointer, which includes a FpRegs pointer that is not safe to use by external
     // modules. In our case, the FpRegs pointer will not be used actually. So the
