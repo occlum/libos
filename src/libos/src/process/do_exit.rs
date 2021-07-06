@@ -2,15 +2,22 @@ use crate::signal::constants::*;
 use std::intrinsics::atomic_store;
 
 use super::do_futex::futex_wake;
+use super::do_vfork::{is_vforked_child_process, vfork_return_to_parent};
 use super::process::{Process, ProcessFilter};
 use super::{table, ProcessRef, TermStatus, ThreadRef, ThreadStatus};
 use crate::prelude::*;
 use crate::signal::{KernelSignal, SigNum};
+use crate::syscall::CpuContext;
 
-pub fn do_exit_group(status: i32) {
-    let term_status = TermStatus::Exited(status as u8);
-    current!().process().force_exit(term_status);
-    exit_thread(term_status);
+pub fn do_exit_group(status: i32, curr_user_ctxt: &mut CpuContext) {
+    if is_vforked_child_process() {
+        vfork_return_to_parent(curr_user_ctxt as *mut _, current!().process().pid());
+    } else {
+        warn!("no vfork, just exit");
+        let term_status = TermStatus::Exited(status as u8);
+        current!().process().force_exit(term_status);
+        return exit_thread(term_status);
+    }
 }
 
 pub fn do_exit(status: i32) {

@@ -117,6 +117,7 @@ fn new_process(
         host_stdio_fds,
         current_ref,
         None,
+        None,
     )?;
     table::add_process(new_process_ref.clone());
     table::add_thread(new_process_ref.main_thread().unwrap());
@@ -130,6 +131,8 @@ pub fn new_process_for_exec(
     argv: &[CString],
     envp: &[CString],
     current_ref: &ThreadRef,
+    reuse_tid: Option<ThreadId>,
+    parent_process: Option<ProcessRef>,
 ) -> Result<ProcessRef> {
     let tid = ThreadId {
         tid: current_ref.process().pid() as u32,
@@ -142,7 +145,8 @@ pub fn new_process_for_exec(
         None,
         None,
         current_ref,
-        Some(tid),
+        reuse_tid,
+        parent_process,
     )?;
 
     Ok(new_process_ref)
@@ -157,6 +161,7 @@ fn new_process_common(
     host_stdio_fds: Option<&HostStdioFds>,
     current_ref: &ThreadRef,
     reuse_tid: Option<ThreadId>,
+    parent_process: Option<ProcessRef>,
 ) -> Result<ProcessRef> {
     let mut argv = argv.clone().to_vec();
     let (is_script, elf_inode, mut elf_buf, elf_header) =
@@ -273,14 +278,19 @@ fn new_process_common(
         let elf_name = elf_path.rsplit('/').collect::<Vec<&str>>()[0];
         let thread_name = ThreadName::new(elf_name);
 
-        let mut parent;
         let mut process_builder = ProcessBuilder::new();
-        if reuse_tid.is_some() {
-            process_builder = process_builder.tid(reuse_tid.unwrap());
-            parent = current!().process().parent();
-        } else {
-            parent = process_ref;
+
+        // Use specified tid if any
+        if let Some(reuse_tid) = reuse_tid {
+            process_builder = process_builder.tid(reuse_tid);
         }
+
+        // Use specified parent process if any
+        let parent = if let Some(parent) = parent_process {
+            parent
+        } else {
+            process_ref
+        };
 
         process_builder
             .vm(vm_ref)

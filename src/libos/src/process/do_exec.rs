@@ -3,6 +3,7 @@ use std::path::Path;
 
 use super::do_exit::exit_old_process_for_execve;
 use super::do_spawn::new_process_for_exec;
+use super::do_vfork::{check_vfork_for_exec, vfork_return_to_parent};
 use super::process::ProcessFilter;
 use super::term_status::TermStatus;
 use super::wait::Waiter;
@@ -11,6 +12,7 @@ use super::{table, ProcessRef, ProcessStatus};
 use super::{task, ThreadRef};
 use crate::interrupt::broadcast_interrupts;
 use crate::prelude::*;
+use crate::syscall::CpuContext;
 
 // FIXME: `occlum exec` command will return early if the application calls execve successfully.
 // Because the "execved"-ed application will run on a new thread and the current thread will exit.
@@ -21,20 +23,38 @@ pub fn do_exec(
     argv: &[CString],
     envp: &[CString],
     current_ref: &ThreadRef,
+    context: *mut CpuContext,
 ) -> Result<isize> {
     trace!(
         "exec current process pid = {:?}",
         current_ref.process().pid()
     );
 
-    // Construct new process structure but with same parent, pid, tid
     let current = current!();
-    let new_process_ref = super::do_spawn::new_process_for_exec(path, argv, envp, current_ref);
+    let (is_forked, tid, parent_process) = check_vfork_for_exec(current_ref);
+
+    let new_process_ref = super::do_spawn::new_process_for_exec(
+        path,
+        argv,
+        envp,
+        current_ref,
+        Some(tid),
+        parent_process,
+    );
 
     if let Ok(new_process_ref) = new_process_ref {
         let new_main_thread = new_process_ref
             .main_thread()
             .expect("the main thread is just created; it must exist");
+
+        if is_forked {
+            // Don't exit current process if this is a vforked child process.
+            table::add_process(new_process_ref.clone());
+            table::add_thread(new_process_ref.main_thread().unwrap());
+            task::enqueue_and_exec(new_main_thread);
+
+            return vfork_return_to_parent(context, current_ref.process().pid());
+        }
 
         // Force exit all child threads of current process
         let term_status = TermStatus::Exited(0 as u8);
