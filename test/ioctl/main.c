@@ -340,6 +340,10 @@ static int generate_and_verify_dcap_quote(int sgx_fd) {
         THROW_ERROR("failed to verify quote");
     }
 
+    if (collateral_expiration_status != 0) {
+        THROW_ERROR("the verification collateral has expired");
+    }
+
     switch (quote_verification_result) {
         case SGX_QL_QV_RESULT_OK:
             return 0;

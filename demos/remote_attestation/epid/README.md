@@ -1,6 +1,6 @@
-# SGX Remote Attestation Demo
+# SGX EPID Remote Attestation Demo
 
-This project demonstrates how to do remote attestation on Occlum.
+This project demonstrates how to do Intel SGX EPID (Enhanced Privacy ID) remote attestation on Occlum.
 
 In a nutshell, Occlum provides SGX capabilities to user apps through ioctls on a special device (`/dev/sgx`).
 To hide the low-level details of ioctls from user apps, a user-friendly, remote attestation library is provided in this demo.
