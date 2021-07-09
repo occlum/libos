@@ -8,8 +8,7 @@ char *read_resolv_conf(void) {
     if (fp == NULL) {
         PAL_WARN("Warning: Failed to open /etc/resolv.conf file");
         return NULL;
-    }
-    else {
+    } else {
         fseek(fp, 0, SEEK_END);
         long fsize = ftell(fp);
         fseek(fp, 0, SEEK_SET);

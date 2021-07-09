@@ -1,8 +1,8 @@
 use std::ffi::{CStr, CString, OsString};
 use std::path::{Path, PathBuf};
+use std::str;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Once;
-use std::str;
 
 use super::*;
 use crate::exception::*;
@@ -95,7 +95,7 @@ pub extern "C" fn occlum_ecall_init(
     });
 
     // Parse host resolv.conf file
-    if let Err(e) =  parse_resolv_conf(resolv_conf_ptr) {
+    if let Err(e) = parse_resolv_conf(resolv_conf_ptr) {
         eprintln!("failed to parse host /etc/resolv.conf: {}", e);
     };
 
@@ -259,7 +259,7 @@ fn parse_resolv_conf(resolv_conf_ptr: *const c_char) -> Result<()> {
         CStr::from_ptr(resolv_conf_ptr).to_bytes()
     };
     // Parse and inspect resolv.conf file
-    if let Err(_) =  resolv_conf::Config::parse(resolv_conf_bytes) {
+    if let Err(_) = resolv_conf::Config::parse(resolv_conf_bytes) {
         return_errno!(EINVAL, "malformated host /etc/resolv.conf");
     }
 

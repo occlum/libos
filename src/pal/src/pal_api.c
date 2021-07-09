@@ -2,7 +2,7 @@
 #include "Enclave_u.h"
 #include "pal_enclave.h"
 #include "pal_error.h"
-#include "pal_init_read.h"
+#include "pal_load_resolv_conf.h"
 #include "pal_interrupt_thread.h"
 #include "pal_log.h"
 #include "pal_sig_handler.h"

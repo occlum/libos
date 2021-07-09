@@ -21,7 +21,7 @@ index 0022252..617e319 100644
  [dependencies]
 -quick-error = "1.0.0"
 +quick-error = {  git = "https://github.com/mesalock-linux/quick-error-sgx.git"  }
-+sgx_tstd = { path = "../rust-sgx-sdk/sgx_tstd", features = ["backtrace"] }
++sgx_tstd = { git = "https://github.com/apache/teaclave-sgx-sdk.git" }
  hostname = { version = "^0.3", optional = true }
  
  [features]
