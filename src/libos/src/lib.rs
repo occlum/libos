@@ -53,7 +53,6 @@ extern crate serde;
 extern crate serde_json;
 #[macro_use]
 extern crate memoffset;
-
 #[macro_use]
 extern crate resolv_conf;
 

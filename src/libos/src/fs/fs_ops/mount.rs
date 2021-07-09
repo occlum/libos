@@ -30,23 +30,23 @@ pub fn do_mount_rootfs(
         *root_inode = new_root_inode;
         *ENTRY_POINTS.write().unwrap() = user_config.entry_points.to_owned();
     });
+    // Write resolv.conf file into mounted file system
+    write_resolv_conf()?;
 
-    let resolv_conf_path = String::from("/etc/resolv.conf");
+    Ok(())
+}
 
+fn write_resolv_conf() -> Result<()> {
+    const RESOLV_CONF_PATH: &'static str = "/etc/resolv.conf";
     let fs_view = FsView::new();
-    match fs_view.lookup_inode(&resolv_conf_path) {
+    match fs_view.lookup_inode(RESOLV_CONF_PATH) {
         Err(e) if e.errno() == ENOENT => {
-            let resolv_conf_file = match fs_view.open_file(
-                &resolv_conf_path,
+            let resolv_conf_file = fs_view.open_file(
+                RESOLV_CONF_PATH,
                 AccessMode::O_RDWR as u32 | CreationFlags::O_CREAT.bits(),
                 0o666,
-            ) {
-                Err(e) => {
-                    return_errno!(EINVAL, "failed to open /etc/resolv.conf in enclave");
-                }
-                Ok(file) => file,
-            };
-            resolv_conf_file.write(&*RESOLV_CONF_BYTES.read().unwrap());
+            )?;
+            resolv_conf_file.write(&*RESOLV_CONF_BYTES.read().unwrap().as_bytes());
         }
         Err(e) => return Err(e),
         _ => (),

@@ -2,6 +2,7 @@ use std::ffi::{CStr, CString, OsString};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Once;
+use std::str;
 
 use super::*;
 use crate::exception::*;
@@ -24,7 +25,7 @@ lazy_static! {
     static ref HAS_INIT: AtomicBool = AtomicBool::new(false);
     pub static ref ENTRY_POINTS: RwLock<Vec<PathBuf>> =
         RwLock::new(config::LIBOS_CONFIG.entry_points.clone());
-    pub static ref RESOLV_CONF_BYTES: RwLock<Vec<u8>> = RwLock::new(Vec::new());
+    pub static ref RESOLV_CONF_BYTES: RwLock<String> = RwLock::new(String::new());
 }
 
 macro_rules! ecall_errno {
@@ -93,37 +94,9 @@ pub extern "C" fn occlum_ecall_init(
         unsafe { backtrace::enable_backtrace(&ENCLAVE_PATH, PrintFormat::Short) };
     });
 
-    // Read resolv.conf file from host
-    let resolv_conf_bytes = unsafe {
-        assert!(!resolv_conf_ptr.is_null());
-        CStr::from_ptr(resolv_conf_ptr).to_bytes()
-    };
-
-    // Parse and inspect resolv.conf file
-    match resolv_conf::Config::parse(resolv_conf_bytes) {
-        Err(e) => {
-            eprintln!("invalid host /etc/resolv.conf: {}", e);
-        }
-        Ok(cfg) => {
-            // Write resolv.conf file into occlum init fs
-            let fs_view = FsView::new();
-            let resolv_conf_file = match fs_view.open_file(
-                "/etc/resolv.conf",
-                AccessMode::O_RDWR as u32 | CreationFlags::O_CREAT.bits(),
-                0o666,
-            ) {
-                Err(e) => {
-                    eprintln!("failed to open /etc/resolv.conf in enclave: {}", e);
-                    return ecall_errno!(EINVAL);
-                }
-                Ok(file) => file,
-            };
-            resolv_conf_file.write(resolv_conf_bytes);
-
-            // Prepare resolv.conf file for occlum image fs
-            let mut resolv_conf_write = RESOLV_CONF_BYTES.write().unwrap();
-            resolv_conf_write.append(&mut resolv_conf_bytes.to_vec());
-        }
+    // Parse host resolv.conf file
+    if let Err(e) =  parse_resolv_conf(resolv_conf_ptr) {
+        eprintln!("failed to parse host /etc/resolv.conf: {}", e);
     };
 
     0
@@ -277,6 +250,32 @@ fn parse_arguments(
     let host_stdio_fds = HostStdioFds::from_user(host_stdio_fds)?;
 
     Ok((path_buf, args, env_merged, host_stdio_fds))
+}
+
+fn parse_resolv_conf(resolv_conf_ptr: *const c_char) -> Result<()> {
+    // Read resolv.conf file from host
+    let resolv_conf_bytes = unsafe {
+        assert!(!resolv_conf_ptr.is_null());
+        CStr::from_ptr(resolv_conf_ptr).to_bytes()
+    };
+    // Parse and inspect resolv.conf file
+    if let Err(_) =  resolv_conf::Config::parse(resolv_conf_bytes) {
+        return_errno!(EINVAL, "malformated host /etc/resolv.conf");
+    }
+
+    let fs_view = FsView::new();
+    let resolv_conf_file = fs_view.open_file(
+        "/etc/resolv.conf",
+        AccessMode::O_RDWR as u32 | CreationFlags::O_CREAT.bits(),
+        0o666,
+    )?;
+    resolv_conf_file.write(resolv_conf_bytes)?;
+
+    // Prepare resolv.conf file for occlum mounted fs
+    let mut resolv_conf_write = RESOLV_CONF_BYTES.write()?;
+    resolv_conf_write.push_str(str::from_utf8(resolv_conf_bytes).unwrap());
+
+    Ok(())
 }
 
 fn do_new_process(

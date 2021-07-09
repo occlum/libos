@@ -25,9 +25,3 @@
 [submodule "deps/resolv-conf"]
 	path = deps/resolv-conf
 	url = https://github.com/tailhook/resolv-conf.git
-[submodule "deps/quick-error"]
-	path = deps/quick-error
-	url = https://github.com/tailhook/quick-error.git
-[submodule "deps/no-std-net"]
-	path = deps/no-std-net
-	url = https://github.com/dunmatt/no-std-net.git
