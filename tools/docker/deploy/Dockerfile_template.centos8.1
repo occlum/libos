@@ -1,0 +1,51 @@
+# base stage:
+# Install dependencies for deployment to get minimum size for deployer.
+# For deployment environment, only occlum-runtime, sgx-psw and python2 are needed.
+FROM centos:8.1.1911 as base
+LABEL maintainer="Chunyang Hui <sanqian.hcy@antgroup.com>"
+
+RUN echo -e '[inclavare-containers]\n\
+name=inclavare-containers\n\
+enabled=1\n\
+baseurl=https://mirrors.openanolis.org/inclavare-containers/rpm-repo/\n\
+gpgcheck=1\n\
+repo_gpgcheck=1\n\
+gpgkey=https://mirrors.openanolis.org/inclavare-containers/rpm-repo/RPM-GPG-KEY-rpm-sign\n\
+gpgcakey=https://mirrors.openanolis.org/inclavare-containers/rpm-repo/RPM-GPG-KEY-rpm-sign-ca'\
+>> /etc/yum.repos.d/inclavare-containers.repo && \
+    yum install --nogpgcheck -y python2 occlum-runtime && \
+    yum clean all && \
+    ln -s /usr/bin/python2 /usr/local/bin/python && \
+    mkdir -p /var/run/aesmd
+ENV PATH="/opt/occlum/build/bin:/usr/local/occlum/bin:$PATH"
+
+
+# packager stage:
+# Users can build their own applications and put to occlum instance. And then use "occlum package"
+# to get a minimum subset of files to run in deployment environment.
+FROM base as packager
+RUN yum install -y fuse-libs libtool make gdb git && \
+    cd /root && \
+    git clone https://github.com/occlum/occlum.git && \
+    cp -r /root/occlum/demos /root/demos && \
+    rm -rf /root/occlum && \
+    yum install --nogpgcheck -y occlum && \
+    yum clean all && \
+    rm -rf /tmp/* && \
+    cd /root && \
+    occlum new occlum-instance && \
+    cd /root/demos/hello_c && \
+    make && cp hello_world /root/occlum-instance/image/bin && \
+    cd /root/occlum-instance && occlum build && \
+    occlum package
+
+
+# deployer stage:
+# Unpack the package from packager
+FROM base as deployer
+WORKDIR /root
+COPY entrypoint.sh /opt/occlum
+COPY --from=packager /root/occlum-instance/occlum-instance.tar.gz .
+RUN tar -xvzf occlum-instance.tar.gz
+
+ENTRYPOINT ["/opt/occlum/entrypoint.sh"]
