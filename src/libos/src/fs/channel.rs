@@ -12,6 +12,7 @@ use crate::prelude::*;
 pub struct Channel<I> {
     producer: Producer<I>,
     consumer: Consumer<I>,
+    uid: usize, // Can be used to identify a channel
 }
 
 impl<I> Channel<I> {
@@ -20,6 +21,7 @@ impl<I> Channel<I> {
         let state = Arc::new(State::new());
 
         let rb = RingBuffer::new(capacity);
+        let uid = Self::gen_uid(&rb);
         let (rb_producer, rb_consumer) = rb.split();
         let mut producer = Producer::new(rb_producer, state.clone());
         let mut consumer = Consumer::new(rb_consumer, state.clone());
@@ -43,7 +45,19 @@ impl<I> Channel<I> {
             None,
         );
 
-        Ok(Self { producer, consumer })
+        Ok(Self {
+            producer,
+            consumer,
+            uid,
+        })
+    }
+
+    // Use a random number for uid
+    fn gen_uid(ring_buf: &RingBuffer<I>) -> usize {
+        use crate::util::random;
+        let mut random_buf: [u8; 8] = [0u8; 8]; // same length as usize
+        random::get_random(&mut random_buf).expect("failed to get random number");
+        u64::from_le_bytes(random_buf) as usize
     }
 
     /// Push an item into the channel.
@@ -73,7 +87,11 @@ impl<I> Channel<I> {
 
     /// Turn the channel into a pair of producer and consumer.
     pub fn split(self) -> (Producer<I>, Consumer<I>) {
-        let Channel { producer, consumer } = self;
+        let Channel {
+            producer,
+            consumer,
+            uid,
+        } = self;
         (producer, consumer)
     }
 
@@ -83,6 +101,10 @@ impl<I> Channel<I> {
 
     pub fn producer(&self) -> &Producer<I> {
         &self.producer
+    }
+
+    pub fn uid(&self) -> usize {
+        self.uid
     }
 
     pub fn capacity(&self) -> usize {

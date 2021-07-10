@@ -9,7 +9,10 @@ use net::PollEventFlags;
 pub const PIPE_BUF_SIZE: usize = 1024 * 1024;
 
 pub fn pipe(flags: StatusFlags) -> Result<(PipeReader, PipeWriter)> {
-    let (producer, consumer) = Channel::new(PIPE_BUF_SIZE)?.split();
+    let channel = Channel::new(PIPE_BUF_SIZE)?;
+    let channel_uid = channel.uid();
+    let (producer, consumer) = channel.split();
+    debug!("pipe channel uid = {}", channel_uid);
 
     // Only O_NONBLOCK and O_DIRECT can be applied during pipe creation
     let valid_flags = flags & (StatusFlags::O_NONBLOCK | StatusFlags::O_DIRECT);
@@ -22,10 +25,12 @@ pub fn pipe(flags: StatusFlags) -> Result<(PipeReader, PipeWriter)> {
         PipeReader {
             consumer: consumer,
             status_flags: Atomic::new(valid_flags),
+            channel_uid,
         },
         PipeWriter {
             producer: producer,
             status_flags: Atomic::new(valid_flags),
+            channel_uid,
         },
     ))
 }
@@ -33,6 +38,7 @@ pub fn pipe(flags: StatusFlags) -> Result<(PipeReader, PipeWriter)> {
 pub struct PipeReader {
     consumer: Consumer<u8>,
     status_flags: Atomic<StatusFlags>,
+    channel_uid: usize,
 }
 
 impl File for PipeReader {
@@ -131,6 +137,7 @@ impl PipeReader {
 pub struct PipeWriter {
     producer: Producer<u8>,
     status_flags: Atomic<StatusFlags>,
+    channel_uid: usize,
 }
 
 impl File for PipeWriter {
@@ -256,6 +263,7 @@ pub fn do_pipe2(flags: u32) -> Result<[FileDesc; 2]> {
 pub trait PipeType {
     fn as_pipe_reader(&self) -> Result<&PipeReader>;
     fn as_pipe_writer(&self) -> Result<&PipeWriter>;
+    fn channel_uid(&self) -> Result<usize>;
 }
 impl PipeType for FileRef {
     fn as_pipe_reader(&self) -> Result<&PipeReader> {
@@ -267,5 +275,15 @@ impl PipeType for FileRef {
         self.as_any()
             .downcast_ref::<PipeWriter>()
             .ok_or_else(|| errno!(EBADF, "not a pipe writer"))
+    }
+
+    fn channel_uid(&self) -> Result<usize> {
+        let pipe_end = self.as_pipe_reader();
+        if pipe_end.is_ok() {
+            return Ok(pipe_end.unwrap().channel_uid);
+        } else {
+            let pipe_end = self.as_pipe_writer()?;
+            return Ok(pipe_end.channel_uid);
+        }
     }
 }

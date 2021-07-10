@@ -3,7 +3,13 @@ use super::*;
 pub fn do_write(fd: FileDesc, buf: &[u8]) -> Result<usize> {
     debug!("write: fd: {}", fd);
     let file_ref = current!().file(fd)?;
-    file_ref.write(buf)
+    let ret = file_ref.write(buf);
+
+    if cfg!(debug_assertions) {
+        let len = ret.as_ref().unwrap().clone();
+        detail_debug_print("write", fd, Some(buf), Some(len))?;
+    }
+    return ret;
 }
 
 pub fn do_writev(fd: FileDesc, bufs: &[&[u8]]) -> Result<usize> {

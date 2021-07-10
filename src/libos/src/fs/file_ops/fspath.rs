@@ -94,7 +94,7 @@ impl<'a> Debug for FsPath<'a> {
 }
 
 /// Get the absolute path by file descriptor
-fn get_abs_path_by_fd(fd: FileDesc) -> Result<String> {
+pub fn get_abs_path_by_fd(fd: FileDesc) -> Result<String> {
     let path = {
         let file_ref = current!().file(fd)?;
         if let Ok(inode_file) = file_ref.as_inode_file() {

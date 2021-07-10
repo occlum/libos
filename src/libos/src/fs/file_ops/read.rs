@@ -1,9 +1,16 @@
 use super::*;
+use file_ops::get_abs_path_by_fd;
 
 pub fn do_read(fd: FileDesc, buf: &mut [u8]) -> Result<usize> {
     debug!("read: fd: {}", fd);
     let file_ref = current!().file(fd)?;
-    file_ref.read(buf)
+    let ret = file_ref.read(buf);
+
+    if cfg!(debug_assertions) {
+        let len = ret.as_ref().unwrap().clone();
+        detail_debug_print("read", fd, Some(buf), Some(len))?;
+    }
+    return ret;
 }
 
 pub fn do_readv(fd: FileDesc, bufs: &mut [&mut [u8]]) -> Result<usize> {
