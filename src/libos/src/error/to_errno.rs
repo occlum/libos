@@ -97,6 +97,7 @@ impl ToErrno for rcore_fs::vfs::FsError {
             FsError::PermError => EPERM,
             FsError::NameTooLong => ENAMETOOLONG,
             FsError::FileTooBig => EFBIG,
+            FsError::OpNotSupported => EOPNOTSUPP,
         }
     }
 }

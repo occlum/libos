@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <sys/stat.h>
 #include <sys/uio.h>
 #include <errno.h>
@@ -8,6 +9,9 @@
 // ============================================================================
 // Helper function
 // ============================================================================
+
+#define KB (1024)
+#define BLK_SIZE (4 * (KB))
 
 static int create_file(const char *file_path) {
     int fd;
@@ -164,12 +168,20 @@ static int __test_lseek(const char *file_path) {
 }
 
 static int __test_posix_fallocate(const char *file_path) {
-    int fd = open(file_path, O_RDWR);
+    int fd = open(file_path, O_RDONLY);
+    if (fd < 0) {
+        THROW_ERROR("failed to open a file to read");
+    }
+    if (posix_fallocate(fd, 0, 16) != EBADF) {
+        THROW_ERROR("failed to check the open flags for fallocate");
+    }
+    close(fd);
+    fd = open(file_path, O_RDWR);
     if (fd < 0) {
         THROW_ERROR("failed to open a file to read/write");
     }
     off_t offset = -1;
-    off_t len = 100;
+    off_t len = 128;
     if (posix_fallocate(fd, offset, len) != EINVAL) {
         THROW_ERROR("failed to call posix_fallocate with invalid offset");
     }
@@ -199,6 +211,230 @@ static int __test_posix_fallocate(const char *file_path) {
     }
 
     free(read_buf);
+    close(fd);
+    return 0;
+}
+
+#ifndef __GLIBC__
+#define FALLOC_FL_COLLAPSE_RANGE 0x08
+#define FALLOC_FL_ZERO_RANGE 0x10
+#define FALLOC_FL_INSERT_RANGE 0x20
+#endif
+
+static int __test_fallocate_with_invalid_mode(const char *file_path) {
+    int fd = open(file_path, O_RDWR);
+    if (fd < 0) {
+        THROW_ERROR("failed to open a file to read/write");
+    }
+    off_t len = 2 * BLK_SIZE;
+    if (fill_file_with_repeated_bytes(fd, len, 0xFF) < 0) {
+        THROW_ERROR("failed to fill file");
+    }
+    int mode = FALLOC_FL_KEEP_SIZE | 0xDEAD;
+    off_t offset = 0;
+    len = len / 2;
+    int ret = fallocate(fd, mode, offset, len);
+    if (ret >= 0 || errno != EOPNOTSUPP) {
+        THROW_ERROR("failed to check fallocate with invalid mode");
+    }
+    mode = FALLOC_FL_PUNCH_HOLE | FALLOC_FL_ZERO_RANGE;
+    ret = fallocate(fd, mode, offset, len);
+    if (ret >= 0 || errno != EOPNOTSUPP) {
+        THROW_ERROR("failed to check fallocate with punch_hole and zero_range");
+    }
+    mode = FALLOC_FL_PUNCH_HOLE;
+    ret = fallocate(fd, mode, offset, len);
+    if (ret >= 0 || errno != EOPNOTSUPP) {
+        THROW_ERROR("failed to check punch_hole without keep_size");
+    }
+    mode = FALLOC_FL_INSERT_RANGE | FALLOC_FL_KEEP_SIZE;
+    ret = fallocate(fd, mode, offset, len);
+    if (ret >= 0 || errno != EINVAL ) {
+        THROW_ERROR("failed to check insert range with other flags");
+    }
+    mode = FALLOC_FL_COLLAPSE_RANGE | FALLOC_FL_KEEP_SIZE;
+    ret = fallocate(fd, mode, offset, len);
+    if (ret >= 0 || errno != EINVAL ) {
+        THROW_ERROR("failed to check collapse range with other flags");
+    }
+    close(fd);
+    return 0;
+}
+
+static int __test_fallocate_keep_size(const char *file_path) {
+    int fd = open(file_path, O_RDWR);
+    if (fd < 0) {
+        THROW_ERROR("failed to open a file to read/write");
+    }
+    int mode = FALLOC_FL_KEEP_SIZE;
+    off_t offset = 0;
+    off_t len = 64;
+    if (fallocate(fd, mode, offset, len) < 0) {
+        THROW_ERROR("failed to call fallocate with FALLOC_FL_KEEP_SIZE");
+    }
+    struct stat stat_buf;
+    if (fstat(fd, &stat_buf) < 0) {
+        THROW_ERROR("failed to stat file");
+    }
+    if (stat_buf.st_size != 0) {
+        THROW_ERROR("failed to check the len after fallocate");
+    }
+    close(fd);
+    return 0;
+}
+
+static int __test_fallocate_punch_hole(const char *file_path) {
+    int fd = open(file_path, O_RDWR);
+    if (fd < 0) {
+        THROW_ERROR("failed to open a file to read/write");
+    }
+    off_t len = 64;
+    if (fill_file_with_repeated_bytes(fd, len, 0xFF) < 0) {
+        THROW_ERROR("failed to fill file");
+    }
+    int mode = FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE;
+    off_t offset = 0;
+    off_t hole_len = len / 2;
+    if (fallocate(fd, mode, offset, hole_len) < 0) {
+        THROW_ERROR("failed to call fallocate with FALLOC_FL_PUNCH_HOLE");
+    }
+    struct stat stat_buf;
+    if (fstat(fd, &stat_buf) < 0) {
+        THROW_ERROR("failed to stat file");
+    }
+    if (stat_buf.st_size != len) {
+        THROW_ERROR("failed to check the len after fallocate");
+    }
+    if (lseek(fd, offset, SEEK_SET) != offset) {
+        THROW_ERROR("failed to lseek the file");
+    }
+    if (check_file_with_repeated_bytes(fd, hole_len, 0x00) < 0) {
+        THROW_ERROR("failed to check file after punch hole");
+    }
+    close(fd);
+    return 0;
+}
+
+static int __test_fallocate_zero_range(const char *file_path) {
+    int fd = open(file_path, O_RDWR);
+    if (fd < 0) {
+        THROW_ERROR("failed to open a file to read/write");
+    }
+    off_t len = 64;
+    if (fill_file_with_repeated_bytes(fd, len, 0xFF) < 0) {
+        THROW_ERROR("failed to fill file");
+    }
+    int mode = FALLOC_FL_ZERO_RANGE;
+    off_t offset = len / 2;
+    off_t zero_len = len * 2;
+    if (fallocate(fd, mode, offset, zero_len) < 0) {
+        THROW_ERROR("failed to call fallocate with FALLOC_FL_ZERO_RANGE");
+    }
+    struct stat stat_buf;
+    if (fstat(fd, &stat_buf) < 0) {
+        THROW_ERROR("failed to stat file");
+    }
+    if (stat_buf.st_size != offset + zero_len) {
+        THROW_ERROR("failed to check the len after fallocate");
+    }
+    if (lseek(fd, offset, SEEK_SET) != offset) {
+        THROW_ERROR("failed to lseek the file");
+    }
+    if (check_file_with_repeated_bytes(fd, zero_len, 0x00) < 0) {
+        THROW_ERROR("failed to check file after zero range");
+    }
+    close(fd);
+    return 0;
+}
+
+static int __test_fallocate_insert_range(const char *file_path) {
+    int fd = open(file_path, O_RDWR);
+    if (fd < 0) {
+        THROW_ERROR("failed to open a file to read/write");
+    }
+    off_t len = 4 * BLK_SIZE;
+    if (fill_file_with_repeated_bytes(fd, len, 0xFF) < 0) {
+        THROW_ERROR("failed to fill file");
+    }
+    int mode = FALLOC_FL_INSERT_RANGE;
+    off_t offset = len;
+    off_t insert_len = len / 4;
+    int ret = fallocate(fd, mode, offset, insert_len);
+    if (ret >= 0 || errno != EINVAL ) {
+        THROW_ERROR("failed to check insert range with oversized offset");
+    }
+    // make the offset is not the multiple of the filesystem block size
+    offset += 1;
+    ret = fallocate(fd, mode, offset, insert_len);
+    if (ret >= 0 || errno != EINVAL ) {
+        THROW_ERROR("failed to check insert range with invalid offset");
+    }
+    offset = len / 4;
+    if (fallocate(fd, mode, offset, insert_len) < 0) {
+        THROW_ERROR("failed to call fallocate with FALLOC_FL_INSERT_RANGE");
+    }
+    struct stat stat_buf;
+    if (fstat(fd, &stat_buf) < 0) {
+        THROW_ERROR("failed to stat file");
+    }
+    if (stat_buf.st_size != len + insert_len) {
+        THROW_ERROR("failed to check the len after fallocate");
+    }
+    if (lseek(fd, offset, SEEK_SET) != offset) {
+        THROW_ERROR("failed to lseek the file");
+    }
+    if (check_file_with_repeated_bytes(fd, insert_len, 0x00) < 0) {
+        THROW_ERROR("failed to check inserted contents after insert range");
+    }
+    if (lseek(fd, offset + insert_len, SEEK_SET) != offset + insert_len) {
+        THROW_ERROR("failed to lseek the file");
+    }
+    if (check_file_with_repeated_bytes(fd, len - offset, 0xFF) < 0) {
+        THROW_ERROR("failed to check shifted contents after insert range");
+    }
+    close(fd);
+    return 0;
+}
+
+static int __test_fallocate_collapse_range(const char *file_path) {
+    int fd = open(file_path, O_RDWR);
+    if (fd < 0) {
+        THROW_ERROR("failed to open a file to read/write");
+    }
+    off_t len = 4 * BLK_SIZE;
+    if (fill_file_with_repeated_bytes(fd, len, 0xFF) < 0) {
+        THROW_ERROR("failed to fill file");
+    }
+    int mode = FALLOC_FL_COLLAPSE_RANGE;
+    off_t offset = len / 4;
+    off_t collapse_len = len;
+    int ret = fallocate(fd, mode, offset, collapse_len);
+    if (ret >= 0 || errno != EINVAL ) {
+        THROW_ERROR("failed to check collapse range with oversized end_offset");
+    }
+    // make the collapse_len is not the multiple of the filesystem block size
+    collapse_len = len / 4 + 1;
+    ret = fallocate(fd, mode, offset, collapse_len);
+    if (ret >= 0 || errno != EINVAL ) {
+        THROW_ERROR("failed to check collapse range with invalid collapse_len");
+    }
+    collapse_len = len / 4;
+    if (fallocate(fd, mode, offset, collapse_len) < 0) {
+        THROW_ERROR("failed to call fallocate with FALLOC_FL_COLLAPSE_RANGE");
+    }
+    struct stat stat_buf;
+    if (fstat(fd, &stat_buf) < 0) {
+        THROW_ERROR("failed to stat file");
+    }
+    if (stat_buf.st_size != len - collapse_len) {
+        THROW_ERROR("failed to check the len after fallocate");
+    }
+    if (lseek(fd, offset, SEEK_SET) != offset) {
+        THROW_ERROR("failed to lseek the file");
+    }
+    if (check_file_with_repeated_bytes(fd, len - offset - collapse_len, 0xFF) < 0) {
+        THROW_ERROR("failed to check the moved contents after collapse range");
+    }
     close(fd);
     return 0;
 }
@@ -240,6 +476,30 @@ static int test_posix_fallocate() {
     return test_file_framework(__test_posix_fallocate);
 }
 
+static int test_fallocate_with_invalid_mode() {
+    return test_file_framework(__test_fallocate_with_invalid_mode);
+}
+
+static int test_fallocate_keep_size() {
+    return test_file_framework(__test_fallocate_keep_size);
+}
+
+static int test_fallocate_punch_hole() {
+    return test_file_framework(__test_fallocate_punch_hole);
+}
+
+static int test_fallocate_zero_range() {
+    return test_file_framework(__test_fallocate_zero_range);
+}
+
+static int test_fallocate_insert_range() {
+    return test_file_framework(__test_fallocate_insert_range);
+}
+
+static int test_fallocate_collapse_range() {
+    return test_file_framework(__test_fallocate_collapse_range);
+}
+
 // ============================================================================
 // Test suite main
 // ============================================================================
@@ -250,6 +510,12 @@ static test_case_t test_cases[] = {
     TEST_CASE(test_writev_readv),
     TEST_CASE(test_lseek),
     TEST_CASE(test_posix_fallocate),
+    TEST_CASE(test_fallocate_with_invalid_mode),
+    TEST_CASE(test_fallocate_keep_size),
+    TEST_CASE(test_fallocate_punch_hole),
+    TEST_CASE(test_fallocate_zero_range),
+    TEST_CASE(test_fallocate_insert_range),
+    TEST_CASE(test_fallocate_collapse_range),
 };
 
 int main(int argc, const char *argv[]) {

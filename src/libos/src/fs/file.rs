@@ -91,7 +91,7 @@ pub trait File: Debug + Sync + Send + Any {
         return_op_unsupported_error!("set_advisory_lock")
     }
 
-    fn fallocate(&self, _mode: u32, _offset: u64, _len: u64) -> Result<()> {
+    fn fallocate(&self, _mode: FallocateMode, _offset: usize, _len: usize) -> Result<()> {
         return_op_unsupported_error!("fallocate")
     }
 
