@@ -111,6 +111,11 @@ impl File for INodeFile {
         Ok(*offset as i64)
     }
 
+    fn position(&self) -> Result<off_t> {
+        let offset = self.offset.lock().unwrap();
+        Ok(*offset as off_t)
+    }
+
     fn metadata(&self) -> Result<Metadata> {
         let metadata = self.inode.metadata()?;
         Ok(metadata)
@@ -178,28 +183,32 @@ impl File for INodeFile {
     }
 
     fn test_advisory_lock(&self, lock: &mut Flock) -> Result<()> {
-        // Let the advisory lock could be placed
-        // TODO: Implement the real advisory lock
-        lock.l_type = FlockType::F_UNLCK;
+        match self.inode.test_lock_list() {
+            None => {
+                // The advisory lock could be placed if there is no lock list
+                lock.type_ = FlockType::F_UNLCK;
+            }
+            Some(inode_lock_list) => {
+                let flock_list = inode_lock_list
+                    .downcast_ref::<FlockList>()
+                    .ok_or_else(|| errno!(ENOSYS, "cannot convert inode lock list"))?;
+                flock_list.test_lock(lock)?;
+            }
+        }
         Ok(())
     }
 
     fn set_advisory_lock(&self, lock: &Flock) -> Result<()> {
-        match lock.l_type {
-            FlockType::F_RDLCK => {
-                if !self.access_mode.readable() {
-                    return_errno!(EACCES, "File not readable");
-                }
-            }
-            FlockType::F_WRLCK => {
-                if !self.access_mode.writable() {
-                    return_errno!(EACCES, "File not writable");
-                }
-            }
-            _ => (),
+        self.check_flock_with_access_mode(lock)?;
+        let inode_lock_list = self.inode.lock_list()?;
+        let flock_list = inode_lock_list
+            .downcast_ref::<FlockList>()
+            .ok_or_else(|| errno!(ENOSYS, "cannot convert inode lock list"))?;
+        if FlockType::F_UNLCK == lock.type_ {
+            flock_list.unlock(lock)?;
+        } else {
+            flock_list.set_lock_wait(lock)?;
         }
-        // Let the advisory lock could be acquired or released
-        // TODO: Implement the real advisory lock
         Ok(())
     }
 
@@ -263,6 +272,34 @@ impl INodeFile {
 
     pub fn abs_path(&self) -> &str {
         &self.abs_path
+    }
+
+    fn check_flock_with_access_mode(&self, lock: &Flock) -> Result<()> {
+        match lock.type_ {
+            FlockType::F_RDLCK => {
+                if !self.access_mode.readable() {
+                    return_errno!(EBADF, "File not readable");
+                }
+            }
+            FlockType::F_WRLCK => {
+                if !self.access_mode.writable() {
+                    return_errno!(EBADF, "File not writable");
+                }
+            }
+            _ => (),
+        }
+        Ok(())
+    }
+}
+
+impl Drop for INodeFile {
+    fn drop(&mut self) {
+        if let Some(inode_lock_list) = self.inode.test_lock_list() {
+            if let Some(flock_list) = inode_lock_list.downcast_ref::<FlockList>() {
+                let flock = Flock::new(FlockType::F_UNLCK, 0, off_t::max_value(), true).unwrap();
+                flock_list.unlock(&flock).unwrap();
+            }
+        }
     }
 }
 

@@ -338,14 +338,14 @@ jobs:
       run: docker exec pytorch_test bash -c "cd /root/occlum/demos/pytorch; ./install_python_with_conda.sh"
 
     - name: Run pytorch test
-      run: docker exec -d pytorch_test bash -c "cd /root/occlum/demos/pytorch; SGX_MODE=SIM ./run_pytorch_on_occlum.sh 2>&1 | tee /root/occlum/log"
+      run: docker exec -d pytorch_test bash -c "cd /root/occlum/demos/pytorch; SGX_MODE=SIM ./run_pytorch_on_occlum.sh 2>&1 | tee /root/occlum/pytorch_log"
 
-    # FIXME: PyTorch can't exit normally in SIM mode
+    # FIXME: PyTorch can't exit normally in SIM mode, sleep 180s to wait for the result, may be not enough
     - name: Kill the container
       run: |
         sleep 180;
-        cat "$GITHUB_WORKSPACE/log";
-        if grep -q Done "$GITHUB_WORKSPACE/log"; then
+        cat "$GITHUB_WORKSPACE/pytorch_log";
+        if grep -q Done "$GITHUB_WORKSPACE/pytorch_log"; then
           docker stop pytorch_test
         else
           exit 1

@@ -43,6 +43,10 @@ pub trait File: Debug + Sync + Send + Any {
         return_op_unsupported_error!("seek")
     }
 
+    fn position(&self) -> Result<off_t> {
+        return_op_unsupported_error!("position")
+    }
+
     fn metadata(&self) -> Result<Metadata> {
         return_op_unsupported_error!("metadata")
     }

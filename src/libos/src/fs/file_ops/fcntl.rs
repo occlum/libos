@@ -22,6 +22,8 @@ pub enum FcntlCmd<'a> {
     GetLk(&'a mut flock),
     /// Acquire or release a file lock
     SetLk(&'a flock),
+    /// If a conflicting lock is held on the file, then wait for that lock to be released
+    SetLkWait(&'a flock),
 }
 
 impl<'a> FcntlCmd<'a> {
@@ -45,6 +47,12 @@ impl<'a> FcntlCmd<'a> {
                 from_user::check_ptr(flock_ptr)?;
                 let flock_c = unsafe { &*flock_ptr };
                 FcntlCmd::SetLk(flock_c)
+            }
+            libc::F_SETLKW => {
+                let flock_ptr = arg as *const flock;
+                from_user::check_ptr(flock_ptr)?;
+                let flock_c = unsafe { &*flock_ptr };
+                FcntlCmd::SetLkWait(flock_c)
             }
             _ => return_errno!(EINVAL, "unsupported command"),
         })
@@ -94,17 +102,26 @@ pub fn do_fcntl(fd: FileDesc, cmd: &mut FcntlCmd) -> Result<isize> {
         }
         FcntlCmd::GetLk(flock_mut_c) => {
             let file = file_table.get(fd)?;
-            let mut lock = Flock::from_c(*flock_mut_c)?;
-            if let FlockType::F_UNLCK = lock.l_type {
+            let mut lock = Flock::from_c(*flock_mut_c, &file, true)?;
+            if FlockType::F_UNLCK == lock.type_ {
                 return_errno!(EINVAL, "invalid flock type for getlk");
             }
             file.test_advisory_lock(&mut lock)?;
+            trace!("getlk returns: {:?}", lock);
             (*flock_mut_c).copy_from_safe(&lock);
             0
         }
         FcntlCmd::SetLk(flock_c) => {
             let file = file_table.get(fd)?;
-            let lock = Flock::from_c(*flock_c)?;
+            let is_nonblocking = true;
+            let lock = Flock::from_c(*flock_c, &file, is_nonblocking)?;
+            file.set_advisory_lock(&lock)?;
+            0
+        }
+        FcntlCmd::SetLkWait(flock_c) => {
+            let file = file_table.get(fd)?;
+            let is_nonblocking = false;
+            let lock = Flock::from_c(*flock_c, &file, is_nonblocking)?;
             file.set_advisory_lock(&lock)?;
             0
         }

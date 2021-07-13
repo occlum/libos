@@ -9,7 +9,7 @@ pub use self::dup::{do_dup, do_dup2, do_dup3};
 pub use self::fallocate::do_fallocate;
 pub use self::fcntl::{do_fcntl, FcntlCmd};
 pub use self::file_flags::{AccessMode, CreationFlags, StatusFlags};
-pub use self::flock::{Flock, FlockType};
+pub use self::flock::{Flock, FlockList, FlockListCreater, FlockType};
 pub use self::fspath::{FsPath, AT_FDCWD};
 pub use self::fsync::{do_fdatasync, do_fsync};
 pub use self::getdents::{do_getdents, do_getdents64};
