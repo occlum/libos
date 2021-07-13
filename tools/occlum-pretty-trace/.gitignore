@@ -1,0 +1,8 @@
+/target
+/reduced_log*
+/logs*
+/reduced_traces*
+Cargo.lock
+.DS_Store
+/trace_files
+/run_test
