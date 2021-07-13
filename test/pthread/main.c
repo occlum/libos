@@ -85,6 +85,67 @@ static int test_mutex_with_concurrent_counter(void) {
 }
 
 // ============================================================================
+// The test case of robust mutex
+// ============================================================================
+
+struct thread_robust_arg {
+    int                         ti;
+    volatile int                *global_count;
+    pthread_mutex_t             *mutex;
+};
+
+static void *thread_worker(void *_arg) {
+    struct thread_robust_arg *arg = _arg;
+    int err = pthread_mutex_lock(arg->mutex);
+    if (err == EOWNERDEAD) {
+        // The next owner should call pthread_mutex_consistent to make mutex consistent again
+        pthread_mutex_consistent(arg->mutex);
+    }
+    (*arg->global_count)++;
+    // Wait for other threads to acquire the lock
+    sleep(1);
+    // Exit without unlocking the mutex, this will makes the mutex in an inconsistent state.
+    return NULL;
+}
+
+static int test_robust_mutex_with_concurrent_counter(void) {
+    volatile int global_count = 0;
+    pthread_t threads[NTHREADS];
+    struct thread_robust_arg thread_args[NTHREADS];
+    // Init robust mutex
+    pthread_mutex_t mutex;
+    pthread_mutexattr_t attr;
+    pthread_mutexattr_init(&attr);
+    pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST);
+    pthread_mutex_init(&mutex, &attr);
+    // Start the threads
+    for (int ti = 0; ti < NTHREADS; ti++) {
+        struct thread_robust_arg *thread_arg = &thread_args[ti];
+        thread_arg->ti = ti;
+        thread_arg->global_count = &global_count;
+        thread_arg->mutex = &mutex;
+
+        if (pthread_create(&threads[ti], NULL, thread_worker, thread_arg) < 0) {
+            THROW_ERROR("pthread_create failed (ti = %d)", ti);
+        }
+    }
+    // Wait for the threads to finish
+    for (int ti = 0; ti < NTHREADS; ti++) {
+        if (pthread_join(threads[ti], NULL) < 0) {
+            THROW_ERROR("pthread_join failed (ti = %d)", ti);
+        }
+    }
+    // Check the result
+    if (global_count != NTHREADS) {
+        THROW_ERROR("incorrect global_count (actual = %d, expected = %d)", global_count,
+                    NTHREADS);
+    }
+
+    pthread_mutex_destroy(&mutex);
+    return 0;
+}
+
+// ============================================================================
 // The test case of waiting condition variable
 // ============================================================================
 
@@ -189,6 +250,7 @@ static int test_mutex_timedlock() {
 
 static test_case_t test_cases[] = {
     TEST_CASE(test_mutex_with_concurrent_counter),
+    TEST_CASE(test_robust_mutex_with_concurrent_counter),
     TEST_CASE(test_mutex_with_cond_wait),
     TEST_CASE(test_mutex_timedlock),
 };
