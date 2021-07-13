@@ -166,10 +166,8 @@ cmd_init() {
     mkdir -p image/etc
     local occlum_glibc_lib=/opt/occlum/glibc/lib
     local occlum_glibc_etc=/opt/occlum/glibc/etc
-    local cpu_lib=/sys/devices/system/cpu
     if [ -d "$occlum_glibc_lib" ]; then
         mkdir -p "image/$occlum_glibc_lib"
-        mkdir -p "image/$cpu_lib"
         mkdir -p "image/$occlum_glibc_etc"
     fi
     # add default /etc/hosts
@@ -207,8 +205,6 @@ cmd_init() {
         fi
         cp -t "image/$occlum_glibc_etc" \
             /etc/localtime
-        cp -t "image/$cpu_lib" \
-            "$cpu_lib/online"
     fi
 
     mkdir -p initfs
