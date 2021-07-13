@@ -3,6 +3,7 @@
 
 typedef long                time_t;
 typedef long                suseconds_t;
+typedef long                syscall_slong_t;
 typedef int                 clockid_t;
 
 struct timeval {
@@ -15,6 +16,16 @@ struct occlum_stdio_fds {
     int stdout_fd;
     int stderr_fd;
 };
+
+typedef struct mytimespec{
+    time_t tv_sec;
+    syscall_slong_t tv_nsec;
+};
+
+typedef struct itimerspec{
+    struct mytimespec it_interval;
+    struct mytimespec it_value;
+} itimerspec_t;
 
 #define FD_SETSIZE 1024
 typedef struct {

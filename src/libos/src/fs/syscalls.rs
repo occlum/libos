@@ -5,6 +5,7 @@ use super::file_ops::{
     StatFlags, UnlinkFlags, AT_FDCWD,
 };
 use super::fs_ops;
+use super::timer_file::TimerCreationFlags;
 use super::*;
 use util::mem_util::from_user;
 
@@ -31,6 +32,23 @@ pub fn do_eventfd2(init_val: u32, flags: i32) -> Result<isize> {
     let fd = current!().add_file(
         file_ref,
         inner_flags.contains(EventCreationFlags::EFD_CLOEXEC),
+    );
+    Ok(fd as isize)
+}
+
+pub fn do_timerfd_create(clockid: u32, flags: i32) -> Result<isize> {
+    info!("timerfd: clockid {}, flags {} ", clockid, flags);
+
+    let inner_flags =
+        TimerCreationFlags::from_bits(flags).ok_or_else(|| errno!(EINVAL, "invalid flags"))?;
+    let file_ref: Arc<dyn File> = {
+        let timer = TimerFile::new(clockid, inner_flags)?;
+        Arc::new(timer)
+    };
+
+    let fd = current!().add_file(
+        file_ref,
+        inner_flags.contains(TimerCreationFlags::TFD_CLOEXEC),
     );
     Ok(fd as isize)
 }

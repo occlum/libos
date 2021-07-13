@@ -31,6 +31,7 @@ pub use self::pipe::PipeType;
 pub use self::rootfs::ROOT_INODE;
 pub use self::stdio::{HostStdioFds, StdinFile, StdoutFile};
 pub use self::syscalls::*;
+pub use self::timer_file::{AsTimer, TimerCreationFlags, TimerFile};
 
 pub mod channel;
 mod dev_fs;
@@ -50,6 +51,7 @@ mod rootfs;
 mod sefs;
 mod stdio;
 mod syscalls;
+mod timer_file;
 
 /// Split a `path` str to `(base_path, file_name)`
 fn split_path(path: &str) -> (&str, &str) {

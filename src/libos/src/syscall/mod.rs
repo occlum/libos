@@ -16,7 +16,7 @@ use std::ffi::{CStr, CString};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::mem::MaybeUninit;
 use std::ptr;
-use time::{clockid_t, timespec_t, timeval_t};
+use time::{clockid_t, itimerspec_t, timespec_t, timeval_t};
 use util::log::{self, LevelFilter};
 use util::mem_util::from_user::*;
 
@@ -28,8 +28,9 @@ use crate::fs::{
     do_getdents, do_getdents64, do_ioctl, do_lchown, do_link, do_linkat, do_lseek, do_lstat,
     do_mkdir, do_mkdirat, do_mount_rootfs, do_open, do_openat, do_pipe, do_pipe2, do_pread,
     do_pwrite, do_read, do_readlink, do_readlinkat, do_readv, do_rename, do_renameat, do_rmdir,
-    do_sendfile, do_stat, do_statfs, do_symlink, do_symlinkat, do_sync, do_truncate, do_unlink,
-    do_unlinkat, do_write, do_writev, iovec_t, File, FileDesc, FileRef, HostStdioFds, Stat, Statfs,
+    do_sendfile, do_stat, do_statfs, do_symlink, do_symlinkat, do_sync, do_timerfd_create,
+    do_truncate, do_unlink, do_unlinkat, do_write, do_writev, iovec_t, AsTimer, File, FileDesc,
+    FileRef, HostStdioFds, Stat, Statfs,
 };
 use crate::interrupt::{do_handle_interrupt, sgx_interrupt_info_t};
 use crate::misc::{resource_t, rlimit_t, sysinfo_t, utsname_t};
@@ -368,11 +369,11 @@ macro_rules! process_syscall_table_with_callback {
             (Utimensat = 280) => handle_unsupported(),
             (EpollPwait = 281) => do_epoll_pwait(epfd: c_int, events: *mut libc::epoll_event, maxevents: c_int, timeout: c_int, sigmask: *const usize),
             (Signalfd = 282) => handle_unsupported(),
-            (TimerfdCreate = 283) => handle_unsupported(),
+            (TimerfdCreate = 283) => do_timerfd_create(clockid: u32, flags: i32 ),
             (Eventfd = 284) => do_eventfd(init_val: u32),
             (Fallocate = 285) => do_fallocate(fd: FileDesc, mode: u32, offset: off_t, len: off_t),
-            (TimerfdSettime = 286) => handle_unsupported(),
-            (TimerfdGettime = 287) => handle_unsupported(),
+            (TimerfdSettime = 286) => do_timerfd_settime(fd: FileDesc, flags: u32, new_value: *const itimerspec_t, old_value: *mut itimerspec_t),
+            (TimerfdGettime = 287) => do_timerfd_gettime(fd: FileDesc, curr_value: *mut itimerspec_t),
             (Accept4 = 288) => do_accept4(fd: c_int, addr: *mut libc::sockaddr, addr_len: *mut libc::socklen_t, flags: c_int),
             (Signalfd4 = 289) => handle_unsupported(),
             (Eventfd2 = 290) => do_eventfd2(init_val: u32, flags: i32),
@@ -859,6 +860,41 @@ fn do_clock_getres(clockid: clockid_t, res_u: *mut timespec_t) -> Result<isize> 
 }
 
 // TODO: handle remainder
+fn do_timerfd_settime(
+    fd: FileDesc,
+    flags: u32,
+    new_value: *const itimerspec_t,
+    old_value: *mut itimerspec_t,
+) -> Result<isize> {
+    let current = current!();
+    let file = current.file(fd)?;
+    let timerfile = file.as_timer().unwrap();
+    let o_old_value = if !old_value.is_null() {
+        check_mut_ptr(old_value)?;
+        Some(unsafe { &mut *old_value })
+    } else {
+        None
+    };
+    let ret = timerfile
+        .timerfd_settime(flags, new_value, o_old_value)
+        .unwrap() as isize;
+    Ok(ret)
+}
+
+fn do_timerfd_gettime(fd: FileDesc, curr_value: *mut itimerspec_t) -> Result<isize> {
+    let current = current!();
+    let file = current.file(fd)?;
+    let timerfile = file.as_timer().unwrap();
+    let value = if !curr_value.is_null() {
+        check_mut_ptr(curr_value)?;
+        Some(unsafe { &mut *curr_value })
+    } else {
+        None
+    };
+    let ret = timerfile.timerfd_gettime(value).unwrap() as isize;
+    Ok(ret)
+}
+
 fn do_nanosleep(req_u: *const timespec_t, rem_u: *mut timespec_t) -> Result<isize> {
     let req = {
         check_ptr(req_u)?;
