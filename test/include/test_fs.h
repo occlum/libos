@@ -74,22 +74,20 @@ int fill_file_with_repeated_bytes(int fd, size_t len, int byte_val) {
 }
 
 int check_file_with_repeated_bytes(int fd, size_t len, int expected_byte_val) {
-    size_t remain = len;
+    int remain = len;
     char read_buf[512];
     while (remain > 0) {
         int read_nbytes = read(fd, read_buf, sizeof(read_buf));
         if (read_nbytes < 0) {
-            // I/O error
-            return -1;
+            THROW_ERROR("I/O error");
         }
+        size_t check_nbytes = remain < read_nbytes ? remain : read_nbytes;
         remain -= read_nbytes;
         if (read_nbytes == 0 && remain > 0) {
-            // Not enough data in the file
-            return -1;
+            THROW_ERROR("Not enough data in the file");
         }
-        if (check_bytes_in_buf(read_buf, read_nbytes, expected_byte_val) < 0) {
-            // Incorrect data
-            return -1;
+        if (check_bytes_in_buf(read_buf, check_nbytes, expected_byte_val) < 0) {
+            THROW_ERROR("Incorrect data");
         }
     }
     return 0;

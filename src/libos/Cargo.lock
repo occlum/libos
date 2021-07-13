@@ -411,6 +411,7 @@ dependencies = [
 name = "rcore-fs"
 version = "0.1.0"
 dependencies = [
+ "bitflags",
  "spin",
 ]
 

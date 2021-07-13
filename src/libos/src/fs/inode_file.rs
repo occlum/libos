@@ -121,7 +121,10 @@ impl File for INodeFile {
         Ok(())
     }
 
-    fn fallocate(&self, mode: u32, offset: u64, len: u64) -> Result<()> {
+    fn fallocate(&self, mode: FallocateMode, offset: usize, len: usize) -> Result<()> {
+        if !self.access_mode.writable() {
+            return_errno!(EBADF, "File is not opened for writing");
+        }
         self.inode.fallocate(mode, offset, len)?;
         Ok(())
     }
