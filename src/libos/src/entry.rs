@@ -25,7 +25,7 @@ lazy_static! {
     static ref HAS_INIT: AtomicBool = AtomicBool::new(false);
     pub static ref ENTRY_POINTS: RwLock<Vec<PathBuf>> =
         RwLock::new(config::LIBOS_CONFIG.entry_points.clone());
-    pub static ref RESOLV_CONF_BYTES: RwLock<String> = RwLock::new(String::new());
+    pub static ref RESOLV_CONF_STR: RwLock<String> = RwLock::new(String::new());
 }
 
 macro_rules! ecall_errno {
@@ -97,7 +97,7 @@ pub extern "C" fn occlum_ecall_init(
     // Parse host resolv.conf file
     if let Err(e) = parse_resolv_conf(resolv_conf_ptr) {
         eprintln!("failed to parse host /etc/resolv.conf: {}", e);
-    };
+    }
 
     0
 }
@@ -254,10 +254,14 @@ fn parse_arguments(
 
 fn parse_resolv_conf(resolv_conf_ptr: *const c_char) -> Result<()> {
     // Read resolv.conf file from host
-    let resolv_conf_bytes = unsafe {
-        assert!(!resolv_conf_ptr.is_null());
-        CStr::from_ptr(resolv_conf_ptr).to_bytes()
-    };
+    let resolv_conf_bytes = unsafe { CStr::from_ptr(resolv_conf_ptr).to_bytes() };
+    let resolv_conf_str =
+        str::from_utf8(resolv_conf_bytes).map_err(|_| errno!(ENOENT, "invalid symlink content"))?;
+    // if let resolv_conf_str = match str::from_utf8(resolv_conf_bytes) {
+    //     Err(e) => e,
+    //     Ok(str) => str
+    // }
+
     // Parse and inspect resolv.conf file
     if let Err(_) = resolv_conf::Config::parse(resolv_conf_bytes) {
         return_errno!(EINVAL, "malformated host /etc/resolv.conf");
@@ -272,8 +276,8 @@ fn parse_resolv_conf(resolv_conf_ptr: *const c_char) -> Result<()> {
     resolv_conf_file.write(resolv_conf_bytes)?;
 
     // Prepare resolv.conf file for occlum mounted fs
-    let mut resolv_conf_write = RESOLV_CONF_BYTES.write()?;
-    resolv_conf_write.push_str(str::from_utf8(resolv_conf_bytes).unwrap());
+    let mut resolv_conf_write = RESOLV_CONF_STR.write()?;
+    resolv_conf_write.push_str(resolv_conf_str);
 
     Ok(())
 }

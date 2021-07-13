@@ -104,7 +104,7 @@ int occlum_pal_init(const struct occlum_pal_attr *attr) {
     eid = pal_get_enclave_id();
 
     int ecall_ret = 0;
-    char *resolv_conf_ptr = read_resolv_conf();
+    char *resolv_conf_ptr = pal_load_resolv_conf();
     sgx_status_t ecall_status = occlum_ecall_init(eid, &ecall_ret, attr->log_level,
                                 resolved_path, (const char *) resolv_conf_ptr);
     free(resolv_conf_ptr);
