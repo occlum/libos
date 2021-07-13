@@ -12,7 +12,6 @@ occlum init || exit 1
 # 2. Copy files into Occlum Workspace and Build
 mkdir -p image/etc
 mkdir -p image/etc/certs
-cp /etc/resolv.conf image/etc
 cp /etc/hosts image/etc
 cp $THISDIR/conf/ra_config.json image/etc/
 cp $THISDIR/build/$DEMPOAPP image/bin

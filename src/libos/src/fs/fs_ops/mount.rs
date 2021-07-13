@@ -1,3 +1,6 @@
+use super::file_ops::AccessibilityCheckMode;
+use crate::fs::{AccessMode, CreationFlags, FsView};
+use std::ffi::CString;
 use std::sync::Once;
 
 use super::rootfs::{mount_nonroot_fs_according_to, open_root_fs_according_to};
@@ -27,5 +30,21 @@ pub fn do_mount_rootfs(
         *root_inode = new_root_inode;
         *ENTRY_POINTS.write().unwrap() = user_config.entry_points.to_owned();
     });
+    // Write resolv.conf file into mounted file system
+    write_resolv_conf()?;
+
+    Ok(())
+}
+
+fn write_resolv_conf() -> Result<()> {
+    const RESOLV_CONF_PATH: &'static str = "/etc/resolv.conf";
+    let fs_view = FsView::new();
+    // overwrite /etc/resolv.conf if existed
+    let resolv_conf_file = fs_view.open_file(
+        RESOLV_CONF_PATH,
+        AccessMode::O_RDWR as u32 | CreationFlags::O_CREAT.bits() | CreationFlags::O_TRUNC.bits(),
+        0o666,
+    )?;
+    resolv_conf_file.write(&*RESOLV_CONF_STR.read().unwrap().as_bytes());
     Ok(())
 }

@@ -24,7 +24,6 @@ then
 fi
 
 mkdir -p image/etc
-cp /etc/resolv.conf image/etc
 cp ../greeter_client image/bin
 cp $INSTALL_DIR/lib/libprotobuf.so.3.10.0.0 image/lib
 cp $INSTALL_DIR/lib/libcares.so.2 image/lib

@@ -22,3 +22,6 @@
 [submodule "deps/ringbuf"]
 	path = deps/ringbuf
 	url = https://github.com/agerasev/ringbuf.git
+[submodule "deps/resolv-conf"]
+	path = deps/resolv-conf
+	url = https://github.com/tailhook/resolv-conf.git

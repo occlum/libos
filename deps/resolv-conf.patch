@@ -1,0 +1,80 @@
+From 9faee3943a31e359e76c5dfce23918c35fd8f317 Mon Sep 17 00:00:00 2001
+From: ClawSeven <zehuan97@gmail.com>
+Date: Fri, 9 Jul 2021 13:28:42 +0800
+Subject: [PATCH] Transplant resolv-conf into sgx-world
+
+---
+ Cargo.toml     | 3 ++-
+ src/config.rs  | 2 ++
+ src/grammar.rs | 1 +
+ src/ip.rs      | 1 +
+ src/lib.rs     | 3 +++
+ 5 files changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/Cargo.toml b/Cargo.toml
+index 0022252..617e319 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -14,7 +14,8 @@ version = "0.7.0"
+ authors = ["paul@colomiets.name"]
+ 
+ [dependencies]
+-quick-error = "1.0.0"
++quick-error = {  git = "https://github.com/mesalock-linux/quick-error-sgx.git"  }
++sgx_tstd = { git = "https://github.com/apache/teaclave-sgx-sdk.git" }
+ hostname = { version = "^0.3", optional = true }
+ 
+ [features]
+diff --git a/src/config.rs b/src/config.rs
+index b6b6460..8389064 100644
+--- a/src/config.rs
++++ b/src/config.rs
+@@ -3,6 +3,8 @@ use std::iter::{IntoIterator, Iterator};
+ use std::slice::Iter;
+ use {grammar, Network, ParseError, ScopedIp};
+ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
++use std::vec::Vec;
++use std::string::String;
+ 
+ const NAMESERVER_LIMIT:usize = 3;
+ const SEARCH_LIMIT:usize = 6;
+diff --git a/src/grammar.rs b/src/grammar.rs
+index 9a274a8..be85081 100644
+--- a/src/grammar.rs
++++ b/src/grammar.rs
+@@ -1,5 +1,6 @@
+ use std::net::{Ipv4Addr, Ipv6Addr};
+ use std::str::{Utf8Error, from_utf8};
++use std::string::ToString;
+ 
+ use {AddrParseError, Config, Network, Lookup, Family};
+ 
+diff --git a/src/ip.rs b/src/ip.rs
+index c9cfa59..4b4bca2 100644
+--- a/src/ip.rs
++++ b/src/ip.rs
+@@ -2,6 +2,7 @@ use std::error::Error;
+ use std::fmt;
+ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+ use std::str::FromStr;
++use std::string::{String, ToString};
+ 
+ /// A network, that is an IP address and a mask
+ #[derive(Clone, Debug, PartialEq, Eq)]
+diff --git a/src/lib.rs b/src/lib.rs
+index a55a9d7..094a35a 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -91,6 +91,9 @@
+ #![warn(missing_debug_implementations)]
+ #![warn(missing_docs)]
+ 
++#![no_std]
++#[macro_use]
++extern crate sgx_tstd as std;
+ #[macro_use]
+ extern crate quick_error;
+ #[cfg(feature = "system")]
+-- 
+2.17.1
+
